@@ -86,14 +86,19 @@ if [ -n "$OMNIROUTE_API_KEY" ] && [ -f "/app/combos-config.json" ]; then
     ) &
 fi
 
+# 6. Inicia o servidor Gateway em loop de resiliência permanente (Garante que o contêiner NUNCA cai)
 echo "=========================================================="
-echo "[Web] Subindo servidor na porta ${PORT:-20128} (http://0.0.0.0:${PORT:-20128})"
+echo "[+] Servidor OmniRoute Gateway ativo em modo permanente."
 echo "=========================================================="
 
-# 6. Inicia o servidor Gateway (Sem --daemon para manter o container limpo)
-if command -v omniroute >/dev/null 2>&1; then
-    exec omniroute serve --port ${PORT:-20128} --host 0.0.0.0 --no-open
-else
-    echo "[INFO] Binário global não encontrado no PATH, executando via npx..."
-    exec npx -y omniroute@latest serve --port ${PORT:-20128} --host 0.0.0.0 --no-open
-fi
+while true; do
+    echo "[OmniRoute] Subindo servidor na porta ${PORT:-20128} (http://0.0.0.0:${PORT:-20128})..."
+    if command -v omniroute >/dev/null 2>&1; then
+        omniroute serve --port ${PORT:-20128} --host 0.0.0.0 --no-open || true
+    else
+        echo "[INFO] Binário global não encontrado no PATH, executando via npx..."
+        npx -y omniroute@latest serve --port ${PORT:-20128} --host 0.0.0.0 --no-open || true
+    fi
+    echo "[WARN] Processo do Gateway suspenso. Reabrindo em 2 segundos..."
+    sleep 2
+done

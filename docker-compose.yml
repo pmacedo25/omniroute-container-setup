@@ -5,6 +5,7 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
+    image: omniroute-custom:latest
     container_name: omniroute-gateway
     restart: unless-stopped
     tty: true

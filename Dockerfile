@@ -1,23 +1,20 @@
 FROM node:22-slim
 
-# Evita avisos de frontend debconf e configura o npm para silencio de warnings
+# Evita avisos de debconf e silencia logs excessivos de npm
 ENV DEBIAN_FRONTEND=noninteractive
-ENV NPM_CONFIG_LOGLEVEL=error
+ENV NPM_CONFIG_LOGLEVEL=warn
 
-# Instala Git (para clonar skills), curl, ca-certificates e build-essential (python3, make, g++) para compilação nativa C++
+# Instala apenas Git (para clonar skills), curl e ca-certificates (mantendo a imagem super leve)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
-    python3 \
-    make \
-    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Define diretório de trabalho
 WORKDIR /app
 
-# Instala o OmniRoute globalmente com resolução limpa de peer-deps sem warnings
+# Instala o OmniRoute globalmente sem warnings de auditoria
 RUN npm install -g omniroute@latest --legacy-peer-deps --no-fund --no-audit
 
 # Cria diretórios para persistência e skills

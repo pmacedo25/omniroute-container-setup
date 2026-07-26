@@ -182,8 +182,8 @@ if ($modo -eq "1") {
 
     if (-not $containerSuccess) {
         Write-Host "   [WARN] Subida via compose não concluiu. Executando subida nativa direta via '$engine run'..." -ForegroundColor Yellow
-        & $engine build -t omniroute:latest . 2>&1 | Out-Null
-        & $engine run -d -t --name omniroute-gateway -p 20128:20128 -v "$homeDir\.omniroute:/root/.omniroute" omniroute:latest
+        & $engine build -t omniroute-custom:latest . 2>&1 | Out-Null
+        & $engine run -d -t --name omniroute-gateway -p 20128:20128 -v "$homeDir\.omniroute:/root/.omniroute" omniroute-custom:latest
         if ($LASTEXITCODE -eq 0) { $containerSuccess = $true }
     }
     Pop-Location
