@@ -14,8 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Define diretório de trabalho
 WORKDIR /app
 
-# Instala o OmniRoute globalmente sem warnings de auditoria
-RUN npm install -g omniroute@latest --legacy-peer-deps --no-fund --no-audit
+# Instala o OmniRoute globalmente com limpeza imediata de cache
+RUN npm install -g omniroute@latest --legacy-peer-deps --no-fund --no-audit && npm cache clean --force
 
 # Cria diretórios para persistência e skills
 RUN mkdir -p /root/.omniroute/skills /root/.omniroute/data /app/skills-repo
