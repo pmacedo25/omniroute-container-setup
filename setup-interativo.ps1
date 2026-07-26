@@ -45,14 +45,13 @@ if ((Test-Path $envFile) -and ((Test-Path "$homeDir\.omniroute\storage.sqlite") 
 # [+] Garantia de STORAGE_ENCRYPTION_KEY (Prevenção de Internal Error no Dashboard)
 # ------------------------------------------------------------------------------
 # Se a chave de criptografia do banco não existir, gera e salva ANTES de iniciar o servidor
-$envContent = @()
-if (Test-Path $envFile) { $envContent = Get-Content $envFile -ErrorAction SilentlyContinue }
-if ($envContent -notmatch "STORAGE_ENCRYPTION_KEY=") {
+$rawEnv = ""
+if (Test-Path $envFile) { $rawEnv = Get-Content $envFile -Raw -ErrorAction SilentlyContinue }
+if ($rawEnv -notmatch "STORAGE_ENCRYPTION_KEY=") {
     Write-Host "[>] Gerando STORAGE_ENCRYPTION_KEY para proteger o banco SQLite..." -ForegroundColor Cyan
     $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
     $hexKey = [System.BitConverter]::ToString($bytes) -replace '-',''
-    $envContent += "STORAGE_ENCRYPTION_KEY=$hexKey"
-    Set-Content -Path $envFile -Value $envContent -Encoding UTF8
+    Add-Content -Path $envFile -Value "`nSTORAGE_ENCRYPTION_KEY=$hexKey" -Encoding UTF8
     Copy-Item -Path $envFile -Destination "$setupDir\.env" -Force -ErrorAction SilentlyContinue
     Write-Host "[OK] Chave de criptografia registrada no ambiente local e contêiner!" -ForegroundColor Green
 } else {
