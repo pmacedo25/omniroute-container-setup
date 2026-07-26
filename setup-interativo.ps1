@@ -4,7 +4,7 @@
 # ==============================================================================
 
 $OutputEncoding = [System.Text.Encoding]::UTF8
-$env:PATH += ";$env:APPDATA\npm;C:\Program Files\nodejs;C:\Program Files (x86)\nodejs"
+$env:PATH += ";$env:APPDATA\npm;C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;C:\Python314;C:\Python314\Scripts;$env:USERPROFILE\AppData\Roaming\Python\Scripts"
 
 Write-Host "==============================================================================" -ForegroundColor Cyan
 Write-Host "=== ASSISTENTE DE SETUP OMNIROUTE 2026 (ROTEAMENTO, COMBOS & AGENTES) ===" -ForegroundColor Yellow
@@ -32,7 +32,8 @@ if ((Test-Path $envFile) -and ((Test-Path "$homeDir\.omniroute\storage.sqlite") 
     $respModo = Read-Host "[?] Deseja manter/atualizar a configuração atual (1) ou resetar tudo do zero (2)? (Padrão: 1)"
     if ($respModo -eq "2") {
         Write-Host "[WARN] Resetando banco de dados e arquivos antigos..." -ForegroundColor Yellow
-        Get-Process node, npx, cmd -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.MainWindowTitle -match "omniroute" } | Stop-Process -Force -ErrorAction SilentlyContinue
+        Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.CommandLine -match "omniroute" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        taskkill /F /IM node.exe 2>$null
         Start-Sleep -Seconds 1
         Remove-Item "$homeDir\.omniroute\*.sqlite*" -Force -ErrorAction SilentlyContinue
         Remove-Item "$homeDir\.omniroute\data\*.sqlite*" -Force -ErrorAction SilentlyContinue
@@ -144,7 +145,7 @@ if ($modo -eq "1") {
         }
     }
 
-    Write-Host "[>] Encerrando instâncias antigas e loops de CMD..." -ForegroundColor Yellow
+    Write-Host "[>] Encerrando instâncias antigas e processos zumbis..." -ForegroundColor Yellow
     Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.CommandLine -match "omniroute" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     taskkill /F /IM node.exe 2>$null
     Start-Sleep -Seconds 2
@@ -329,16 +330,20 @@ if ([string]::IsNullOrWhiteSpace($opcaoIDE)) { $opcaoIDE = "1" }
 # Instalação e Injeção Automática do OpenHands
 if ($opcaoIDE -eq "1" -or $opcaoIDE -eq "3") {
     Write-Host "`n[>] [Instalação OpenHands] Verificando ambiente..." -ForegroundColor Cyan
-    if (Get-Command "pip" -ErrorAction SilentlyContinue) {
+    
+    $openhandsInstalled = $false
+    if (Get-Command "openhands" -ErrorAction SilentlyContinue) {
+        $openhandsInstalled = $true
+        Write-Host "   [OK] Comando 'openhands' já instalado no sistema!" -ForegroundColor Green
+    } elseif (Get-Command "pip" -ErrorAction SilentlyContinue) {
         Write-Host "   [>] Instalando 'openhands' via Python pip..." -ForegroundColor Cyan
         pip install openhands --quiet 2>$null
-        Write-Host "   [OK] OpenHands instalado com sucesso via pip!" -ForegroundColor Green
-    } elseif (Get-Command "docker" -ErrorAction SilentlyContinue) {
+        if (Get-Command "openhands" -ErrorAction SilentlyContinue) { $openhandsInstalled = $true }
+    }
+
+    if (-not $openhandsInstalled -and (Get-Command "docker" -ErrorAction SilentlyContinue)) {
         Write-Host "   [>] Docker detectado. Subindo o contêiner do OpenHands na porta 3000..." -ForegroundColor Cyan
         docker run -d --name openhands-app -p 3000:3000 ghcr.io/openhands/agent-server:latest 2>$null
-        Write-Host "   [OK] Contêiner do OpenHands iniciado na porta 3000!" -ForegroundColor Green
-    } else {
-        Write-Host "   [INFO] Para instalar o OpenHands desktop, acesse: https://openhands.dev" -ForegroundColor Yellow
     }
 
     # Injeção Automática do Arquivo de Configuração do OpenHands (~/.openhands/agent_settings.json)
@@ -358,6 +363,22 @@ if ($opcaoIDE -eq "1" -or $opcaoIDE -eq "3") {
     [Environment]::SetEnvironmentVariable("LLM_BASE_URL", "http://localhost:20128/v1", "User")
     [Environment]::SetEnvironmentVariable("LLM_API_KEY", $appKey, "User")
     Write-Host "  [OK] Configuração injetada em ~/.openhands/agent_settings.json e variáveis do sistema!" -ForegroundColor Green
+
+    # Iniciar o servidor do OpenHands em background se a porta 3000 ainda não estiver ativa
+    $is3000Up = Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue
+    if (-not $is3000Up -and (Get-Command "openhands" -ErrorAction SilentlyContinue)) {
+        Write-Host "  [>] Iniciando o serviço local do OpenHands na porta 3000 em segundo plano..." -ForegroundColor Cyan
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c openhands serve" -WindowStyle Hidden
+    }
+
+    # Aguarda o serviço estabilizar na porta 3000 antes de abrir a janela do aplicativo
+    Write-Host "  [...] Aguardando o serviço do OpenHands responder na porta 3000..." -ForegroundColor Yellow
+    $openhandsReady = $false
+    for ($i = 0; $i -lt 10; $i++) {
+        $conn3000 = Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue
+        if ($conn3000) { $openhandsReady = $true; break }
+        Start-Sleep -Seconds 2
+    }
 
     # Criação do Aplicativo Desktop Nativo (Atalho .lnk na Área de Trabalho e Menu Iniciar)
     try {
@@ -380,9 +401,12 @@ if ($opcaoIDE -eq "1" -or $opcaoIDE -eq "3") {
         Write-Host "  [OK] Aplicativo 'OpenHands Desktop' instalado na Área de Trabalho e Menu Iniciar!" -ForegroundColor Green
     } catch {}
 
-    Write-Host "  [App] Abrindo a janela do aplicativo OpenHands Desktop..." -ForegroundColor Cyan
-    Start-Process -FilePath $appBrowser -ArgumentList "--app=http://localhost:3000 --user-data-dir=`"$homeDir\.openhands\app_profile`"" -ErrorAction SilentlyContinue
-    Write-Host "  [INFO] Abra o OpenHands no dia a dia clicando no ícone 'OpenHands Desktop' na sua Área de Trabalho!" -ForegroundColor Yellow
+    if ($openhandsReady) {
+        Write-Host "  [App] Serviço ONLINE na porta 3000! Abrindo a janela do aplicativo OpenHands Desktop..." -ForegroundColor Green
+        Start-Process -FilePath $appBrowser -ArgumentList "--app=http://localhost:3000 --user-data-dir=`"$homeDir\.openhands\app_profile`"" -ErrorAction SilentlyContinue
+    } else {
+        Write-Host "  [WARN] O serviço do OpenHands está inicializando. Abra o aplicativo pelo ícone 'OpenHands Desktop' na sua Área de Trabalho!" -ForegroundColor Yellow
+    }
 }
 
 # Instalação e Injeção Automática do OpenCode
@@ -435,7 +459,7 @@ function omni {
     `$logFile = "`$env:USERPROFILE\.omniroute\gateway.log"
     `$skillsDir = "`$env:USERPROFILE\.omniroute\skills"
     `$modeFile = "`$env:USERPROFILE\.omniroute\mode.env"
-    `$env:PATH += ";`$env:APPDATA\npm;C:\Program Files\nodejs;C:\Program Files (x86)\nodejs"
+    `$env:PATH += ";`$env:APPDATA\npm;C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;C:\Python314;C:\Python314\Scripts;`$env:USERPROFILE\AppData\Roaming\Python\Scripts"
     `$env:OMNIROUTE_API_KEY = "$appKey"
     
     `$mode = "local"
@@ -480,7 +504,7 @@ function omni {
                 Write-Host "[OK] Container reiniciado com sucesso!" -ForegroundColor Green
             } else {
                 Write-Host "[Local] Reiniciando Gateway em background invisível..." -ForegroundColor Yellow
-                Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.CommandLine -match "omniroute" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+                Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { `$_.CommandLine -match "20128" -or `$_.CommandLine -match "omniroute" } | ForEach-Object { Stop-Process -Id `$_.ProcessId -Force -ErrorAction SilentlyContinue }
                 taskkill /F /IM node.exe 2>`$null
                 Start-Sleep -Seconds 2
                 
@@ -514,7 +538,8 @@ function omni {
                 Invoke-Expression "`$engine start omniroute-gateway" 2>`$null
                 Write-Host "[OK] Banco SQLite resetado no volume do container e serviço reiniciado!" -ForegroundColor Green
             } else {
-                Get-Process node, npx, cmd -ErrorAction SilentlyContinue | Where-Object { `$_.CommandLine -match "20128" -or `$_.MainWindowTitle -match "omniroute" } | Stop-Process -Force -ErrorAction SilentlyContinue
+                Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { `$_.CommandLine -match "20128" -or `$_.CommandLine -match "omniroute" } | ForEach-Object { Stop-Process -Id `$_.ProcessId -Force -ErrorAction SilentlyContinue }
+                taskkill /F /IM node.exe 2>`$null
                 Start-Sleep -Seconds 1
                 Remove-Item "`$env:USERPROFILE\.omniroute\storage.sqlite*" -Force -ErrorAction SilentlyContinue
                 Write-Host "[OK] Banco SQLite resetado com sucesso! Reiniciando Gateway nativo..." -ForegroundColor Green
