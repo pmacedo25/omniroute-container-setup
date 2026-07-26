@@ -357,11 +357,31 @@ if ($opcaoIDE -eq "1" -or $opcaoIDE -eq "3") {
     [Environment]::SetEnvironmentVariable("LLM_BASE_URL", "http://localhost:20128/v1", "User")
     [Environment]::SetEnvironmentVariable("LLM_API_KEY", $appKey, "User")
     Write-Host "  [OK] Configuração injetada em ~/.openhands/agent_settings.json e variáveis do sistema!" -ForegroundColor Green
-    Write-Host "  [Web] Abrindo a interface do OpenHands no navegador (http://localhost:3000)..." -ForegroundColor Cyan
-    Start-Process "http://localhost:3000" -ErrorAction SilentlyContinue
-    Write-Host "  [INFO] Como executar o OpenHands no dia a dia:" -ForegroundColor Yellow
-    Write-Host "         * No terminal: Digite 'openhands serve' para iniciar o servidor web do agente." -ForegroundColor White
-    Write-Host "         * No navegador: Acesse http://localhost:3000 (ou instale a página como app no MS Edge/Chrome)." -ForegroundColor White
+
+    # Criação do Aplicativo Desktop Nativo (Atalho .lnk na Área de Trabalho e Menu Iniciar)
+    try {
+        $wsh = New-Object -ComObject WScript.Shell
+        $desktopPath = [System.Environment]::GetFolderPath('Desktop')
+        $startMenuPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
+        
+        $appBrowser = "msedge.exe"
+        if (-not (Get-Command "msedge" -ErrorAction SilentlyContinue)) {
+            if (Get-Command "chrome" -ErrorAction SilentlyContinue) { $appBrowser = "chrome.exe" }
+        }
+
+        foreach ($dest in @("$desktopPath\OpenHands Desktop.lnk", "$startMenuPath\OpenHands Desktop.lnk")) {
+            $sc = $wsh.CreateShortcut($dest)
+            $sc.TargetPath = $appBrowser
+            $sc.Arguments = "--app=http://localhost:3000 --user-data-dir=`"$homeDir\.openhands\app_profile`""
+            $sc.Description = "OpenHands Desktop AI Agent App"
+            $sc.Save()
+        }
+        Write-Host "  [OK] Aplicativo 'OpenHands Desktop' instalado na Área de Trabalho e Menu Iniciar!" -ForegroundColor Green
+    } catch {}
+
+    Write-Host "  [App] Abrindo a janela do aplicativo OpenHands Desktop..." -ForegroundColor Cyan
+    Start-Process -FilePath $appBrowser -ArgumentList "--app=http://localhost:3000 --user-data-dir=`"$homeDir\.openhands\app_profile`"" -ErrorAction SilentlyContinue
+    Write-Host "  [INFO] Abra o OpenHands no dia a dia clicando no ícone 'OpenHands Desktop' na sua Área de Trabalho!" -ForegroundColor Yellow
 }
 
 # Instalação e Injeção Automática do OpenCode
