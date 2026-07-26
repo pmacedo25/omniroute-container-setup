@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # Evita avisos de frontend debconf e configura o npm para silencio de warnings
 ENV DEBIAN_FRONTEND=noninteractive
