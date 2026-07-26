@@ -149,7 +149,7 @@ if ($modo -eq "1") {
     Start-Sleep -Seconds 2
 
     Write-Host "[>] Iniciando Gateway nativo em segundo plano (Modo Invisível)..." -ForegroundColor Cyan
-    $cmdArgs = "/c `"set NODE_OPTIONS=--max-old-space-size=8192&& set PORT=20128&& set ENABLE_RTK=true&& set CAVEMAN_MODE=true&& omniroute serve --port 20128 --no-open > `"$logFile`" 2>&1`""
+    $cmdArgs = "/c `"set NODE_OPTIONS=--max-old-space-size=2048&& set PORT=20128&& set ENABLE_RTK=true&& set CAVEMAN_MODE=true&& omniroute serve --port 20128 --no-open > `"$logFile`" 2>&1`""
     Start-Process -FilePath "cmd.exe" -ArgumentList $cmdArgs -WindowStyle Hidden
 }
 
@@ -472,7 +472,7 @@ function omni {
                 Get-Process node, npx, cmd -ErrorAction SilentlyContinue | Where-Object { `$_.CommandLine -match "20128" -or `$_.MainWindowTitle -match "omniroute" } | Stop-Process -Force -ErrorAction SilentlyContinue
                 Start-Sleep -Seconds 2
                 
-                `$cmd = "set NODE_OPTIONS=--max-old-space-size=8192&& set PORT=20128&& set ENABLE_RTK=true&& set CAVEMAN_MODE=true&& omniroute serve --port 20128 --no-open > ""`$logFile"" 2>&1"
+                `$cmd = "set NODE_OPTIONS=--max-old-space-size=2048&& set PORT=20128&& set ENABLE_RTK=true&& set CAVEMAN_MODE=true&& omniroute serve --port 20128 --no-open > ""`$logFile"" 2>&1"
                 Start-Process -FilePath "cmd.exe" -ArgumentList "/c", `$cmd -WindowStyle Hidden
                 Write-Host "[OK] Gateway nativo reiniciado em background sem janelas pop-up!" -ForegroundColor Green
             }
