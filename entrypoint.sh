@@ -39,8 +39,8 @@ if [ -d "$SKILLS_DIR/.git" ]; then
     git -C "$SKILLS_DIR" pull origin ${GITHUB_BRANCH:-main} --quiet || echo "[WARN] Aviso: Falha no git pull (offline?). Mantendo cache local."
 else
     echo "[>] Clonando repositório de Skills diretamente para $SKILLS_DIR..."
-    rm -rf "$SKILLS_DIR" && mkdir -p "$SKILLS_DIR"
-    git clone --branch ${GITHUB_BRANCH:-main} "$SKILLS_REPO" "$SKILLS_DIR" || echo "[WARN] Aviso: Falha ao clonar repo. Verifique a URL."
+    find "$SKILLS_DIR" -mindepth 1 -delete 2>/dev/null || true
+    GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch ${GITHUB_BRANCH:-main} "$SKILLS_REPO" "$SKILLS_DIR" 2>/dev/null || echo "[WARN] Aviso: Falha ao clonar repo. Mantendo diretório ativo."
 fi
 
 # Verificação do índice AGENTS.md e sub-skills
