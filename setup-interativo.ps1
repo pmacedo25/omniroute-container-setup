@@ -45,14 +45,36 @@ if ($modo -ne "2") { $modo = "1" }
 
 if ($modo -eq "1") {
     "OMNIROUTE_MODE=container" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
+    
+    Write-Host "`n[>] [Limpeza Modo Container] Verificando e removendo processos e vestígios locais nativos..." -ForegroundColor Yellow
+    
+    # 1. Encerra qualquer instância Node.js/OmniRoute rodando localmente no Windows
+    Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.CommandLine -match "omniroute" } | ForEach-Object { 
+        Write-Host "   [>] Encerrando processo OmniRoute local (PID: $($_.ProcessId))..." -ForegroundColor Cyan
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue 
+    }
+    taskkill /F /IM node.exe 2>$null
+    
+    # 2. Encerra qualquer serviço/instância do OpenHands rodando localmente no Windows
+    Get-CimInstance Win32_Process -Filter "name='python.exe' or name='cmd.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "openhands" } | ForEach-Object {
+        Write-Host "   [>] Encerrando processo OpenHands local (PID: $($_.ProcessId))..." -ForegroundColor Cyan
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+
+    # 3. Remove variáveis de ambiente locais do Windows que não são mais necessárias
+    [Environment]::SetEnvironmentVariable("LLM_MODEL", $null, "User")
+    [Environment]::SetEnvironmentVariable("LLM_BASE_URL", $null, "User")
+    [Environment]::SetEnvironmentVariable("LLM_API_KEY", $null, "User")
+    Write-Host "   [OK] Variáveis de ambiente locais limpas das configurações do usuário!" -ForegroundColor Green
+
+    # 4. Remove atalhos antigos do OpenCode se existirem
+    $desktopPath = [System.Environment]::GetFolderPath('Desktop')
+    $startMenuPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
+    Remove-Item "$desktopPath\OpenCode Desktop.lnk" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$startMenuPath\OpenCode Desktop.lnk" -Force -ErrorAction SilentlyContinue
 } else {
     "OMNIROUTE_MODE=local" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
-}
-
-# ------------------------------------------------------------------------------
-# [+] Tratamento do Banco de Dados (Zero WASM Memory Corruption no Modo Nativo)
-# ------------------------------------------------------------------------------
-if ($modo -eq "2") {
+    
     Write-Host "`n[>] Modo Nativo Windows selecionado." -ForegroundColor Cyan
     Write-Host "[>] Encerrando instâncias Node antigas e inicializando banco SQLite limpo..." -ForegroundColor Cyan
     Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.CommandLine -match "omniroute" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
