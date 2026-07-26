@@ -53,8 +53,10 @@ if ($envContent -notmatch "STORAGE_ENCRYPTION_KEY=") {
     $hexKey = [System.BitConverter]::ToString($bytes) -replace '-',''
     $envContent += "STORAGE_ENCRYPTION_KEY=$hexKey"
     Set-Content -Path $envFile -Value $envContent -Encoding UTF8
-    Write-Host "[OK] Chave de criptografia registrada com sucesso!" -ForegroundColor Green
+    Copy-Item -Path $envFile -Destination "$setupDir\.env" -Force -ErrorAction SilentlyContinue
+    Write-Host "[OK] Chave de criptografia registrada no ambiente local e contêiner!" -ForegroundColor Green
 } else {
+    Copy-Item -Path $envFile -Destination "$setupDir\.env" -Force -ErrorAction SilentlyContinue
     Write-Host "[OK] Chave STORAGE_ENCRYPTION_KEY existente validada no ambiente." -ForegroundColor Green
 }
 
@@ -235,8 +237,8 @@ $currentEnv = @()
 if (Test-Path $envFile) { $currentEnv = Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch "^OMNIROUTE_API_KEY=" } }
 $currentEnv += "OMNIROUTE_API_KEY=$appKey"
 Set-Content -Path $envFile -Value $currentEnv -Encoding UTF8
-"OMNIROUTE_API_KEY=$appKey" | Set-Content "$setupDir\.env" -Encoding UTF8
-Write-Host "[OK] APPKEY registrada nas variáveis do sistema e no ambiente local sem sobrescrever a criptografia!" -ForegroundColor Green
+Copy-Item -Path $envFile -Destination "$setupDir\.env" -Force -ErrorAction SilentlyContinue
+Write-Host "[OK] APPKEY registrada nas variáveis do sistema e no ambiente (Local e Contêiner)!" -ForegroundColor Green
 
 # ------------------------------------------------------------------------------
 # [+] ETAPA 4: Configuração de Combos Padrão (Default Combos) via API

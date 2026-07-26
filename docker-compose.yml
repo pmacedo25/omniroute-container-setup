@@ -20,8 +20,8 @@ services:
       - GITHUB_BRANCH=main
       # Conecte suas contas diretamente pelo Dashboard Web em http://localhost:20128/dashboard
     volumes:
-      # Persiste o banco de dados local SQLite (onde ficam salvas suas contas logadas e histórico)
-      - omniroute_data:/root/.omniroute/data
+      # Persiste todo o diretório de configuração do OmniRoute (banco SQLite e chaves de criptografia .env)
+      - omniroute_data:/root/.omniroute
       # Pasta onde as Skills baixadas do GitHub ficarão como um repositório Git vivo e dinâmico
       - omniroute_skills:/root/.omniroute/skills
       # Monta o arquivo de configuração de Combos inicial

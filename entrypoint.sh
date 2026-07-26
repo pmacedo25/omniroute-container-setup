@@ -5,7 +5,30 @@ echo "=========================================================="
 echo "[+] Iniciando Container do OmniRoute Gateway (Edição 2026)"
 echo "=========================================================="
 
-# 1. Sincronização do Repositório de Skills via Git Clone Direto
+# 1. Garantia de STORAGE_ENCRYPTION_KEY e Persistência do Banco SQLite
+mkdir -p "/root/.omniroute"
+ENV_FILE="/root/.omniroute/.env"
+
+if [ ! -f "$ENV_FILE" ] || ! grep -q "STORAGE_ENCRYPTION_KEY=" "$ENV_FILE"; then
+    echo "[>] [Container] Gerando STORAGE_ENCRYPTION_KEY para proteger o banco SQLite no volume..."
+    HEX_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    echo "STORAGE_ENCRYPTION_KEY=$HEX_KEY" >> "$ENV_FILE"
+    echo "[OK] [Container] Chave de criptografia registrada em $ENV_FILE!"
+fi
+
+# Exporta variáveis do arquivo .env do contêiner
+if [ -f "$ENV_FILE" ]; then
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+fi
+
+# Link simbólico para garantir que o SQLite em /app aponte para o volume persistido em /root/.omniroute
+if [ ! -f "/root/.omniroute/storage.sqlite" ]; then
+    touch "/root/.omniroute/storage.sqlite"
+fi
+ln -sf "/root/.omniroute/storage.sqlite" "/app/storage.sqlite"
+echo "[OK] [Container] Banco de dados vinculado ao volume persistente em /root/.omniroute."
+
+# 2. Sincronização do Repositório de Skills via Git Clone Direto
 SKILLS_REPO=${GITHUB_SKILLS_REPO:-${OMNIROUTE_SKILLS_REPO:-"https://github.com/pmacedo25/project-agents-templates.git"}}
 SKILLS_DIR="/root/.omniroute/skills"
 
@@ -31,7 +54,7 @@ if [ -d "$SKILLS_DIR/.agents" ]; then
     echo "[OK] Pasta '.agents/' ativa com $SUB_COUNT sub-skills detectadas."
 fi
 
-# 2. Agendador Automático em Background (Git Pull de HORA EM HORA dentro do Container)
+# 3. Agendador Automático em Background (Git Pull de HORA EM HORA dentro do Container)
 (
     while true; do
         sleep 3600 # 1 hora em segundos (3600s)
@@ -43,7 +66,7 @@ fi
 ) &
 echo "[OK] Sincronizador contínuo de Skills em segundo plano ativo (Atualização de hora em hora)."
 
-# 3. Verificando ativação de otimizadores de token
+# 4. Verificando ativação de otimizadores de token
 if [ "$ENABLE_RTK" = "true" ]; then
     echo "[INFO] RTK Token Saver ATIVADO: Saídas verbosas de terminal serão comprimidas."
 fi
@@ -52,7 +75,7 @@ if [ "$CAVEMAN_MODE" = "true" ]; then
     echo "[INFO] Caveman Mode ATIVADO: Modelos responderão de forma ultraconcisa."
 fi
 
-# 4. Sincronizador de Combos Padrão via API REST no Container
+# 5. Sincronizador de Combos Padrão via API REST no Container
 if [ -n "$OMNIROUTE_API_KEY" ] && [ -f "/app/combos-config.json" ]; then
     (
         sleep 6
@@ -68,7 +91,7 @@ echo "=========================================================="
 echo "[Web] Subindo servidor na porta ${PORT:-20128} (http://0.0.0.0:${PORT:-20128})"
 echo "=========================================================="
 
-# 5. Inicia o servidor Gateway (Sem --daemon para manter o container limpo)
+# 6. Inicia o servidor Gateway (Sem --daemon para manter o container limpo)
 if command -v omniroute >/dev/null 2>&1; then
     exec omniroute serve --port ${PORT:-20128} --host 0.0.0.0 --no-open
 elif command -v 9router >/dev/null 2>&1; then
