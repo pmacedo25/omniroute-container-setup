@@ -15,10 +15,48 @@ $homeDir = $env:USERPROFILE
 $skillsDir = "$homeDir\.omniroute\skills"
 $logFile = "$homeDir\.omniroute\gateway.log"
 $modeFile = "$homeDir\.omniroute\mode.env"
+$envFile = "$homeDir\.omniroute\.env"
 
-# Garante que o diretório base existe
+# Garante que os diretórios base existem
 if (-not (Test-Path "$homeDir\.omniroute")) { New-Item -Path "$homeDir\.omniroute" -ItemType Directory -Force | Out-Null }
 if (-not (Test-Path "$homeDir\.omniroute\logs")) { New-Item -Path "$homeDir\.omniroute\logs" -ItemType Directory -Force | Out-Null }
+
+# ------------------------------------------------------------------------------
+# [+] Verificação de Reinstalação vs Nova Instalação
+# ------------------------------------------------------------------------------
+$isReinstall = $false
+if ((Test-Path $envFile) -and ((Test-Path "$homeDir\.omniroute\storage.sqlite") -or (Test-Path "$homeDir\.omniroute\data\storage.sqlite") -or (Test-Path "$homeDir\.omniroute\storage.sqlite3"))) {
+    $isReinstall = $true
+    Write-Host "`n[INFO] Instalação existente do OmniRoute detectada em ~/.omniroute!" -ForegroundColor Cyan
+    Write-Host "       Suas chaves de criptografia e bancos de dados serão PRESERVADOS (evitando perda de contas)." -ForegroundColor Green
+    $respModo = Read-Host "[?] Deseja manter/atualizar a configuração atual (1) ou resetar tudo do zero (2)? (Padrão: 1)"
+    if ($respModo -eq "2") {
+        Write-Host "[WARN] Resetando banco de dados e arquivos antigos..." -ForegroundColor Yellow
+        Get-Process node, npx, cmd -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.MainWindowTitle -match "omniroute" } | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
+        Remove-Item "$homeDir\.omniroute\*.sqlite*" -Force -ErrorAction SilentlyContinue
+        Remove-Item "$homeDir\.omniroute\data\*.sqlite*" -Force -ErrorAction SilentlyContinue
+        Remove-Item $envFile -Force -ErrorAction SilentlyContinue
+        $isReinstall = $false
+    }
+}
+
+# ------------------------------------------------------------------------------
+# [+] Garantia de STORAGE_ENCRYPTION_KEY (Prevenção de Internal Error no Dashboard)
+# ------------------------------------------------------------------------------
+# Se a chave de criptografia do banco não existir, gera e salva ANTES de iniciar o servidor
+$envContent = @()
+if (Test-Path $envFile) { $envContent = Get-Content $envFile -ErrorAction SilentlyContinue }
+if ($envContent -notmatch "STORAGE_ENCRYPTION_KEY=") {
+    Write-Host "[>] Gerando STORAGE_ENCRYPTION_KEY para proteger o banco SQLite..." -ForegroundColor Cyan
+    $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+    $hexKey = [System.BitConverter]::ToString($bytes) -replace '-',''
+    $envContent += "STORAGE_ENCRYPTION_KEY=$hexKey"
+    Set-Content -Path $envFile -Value $envContent -Encoding UTF8
+    Write-Host "[OK] Chave de criptografia registrada com sucesso!" -ForegroundColor Green
+} else {
+    Write-Host "[OK] Chave STORAGE_ENCRYPTION_KEY existente validada no ambiente." -ForegroundColor Green
+}
 
 # ------------------------------------------------------------------------------
 # [+] ETAPA 1: Escolha do Modo de Instalação (Container ou Nativo Windows)
@@ -94,8 +132,16 @@ if ($modo -eq "1") {
         Write-Host "[ERROR] Node.js não encontrado no PATH! Instale o Node.js 20+ no Windows antes de continuar." -ForegroundColor Red
         return
     }
-    Write-Host "[>] Instalando/Atualizando OmniRoute globalmente via npm..." -ForegroundColor Cyan
-    npm install -g omniroute@latest --silent 2>$null
+    
+    if (-not $isReinstall) {
+        Write-Host "[>] Nova instalação detectada. Instalando OmniRoute globalmente via npm..." -ForegroundColor Cyan
+        npm install -g omniroute@latest --silent 2>$null
+    } else {
+        Write-Host "[>] Reinstalação/Atualização. Checando binário global do OmniRoute..." -ForegroundColor Cyan
+        if (-not (Get-Command "omniroute" -ErrorAction SilentlyContinue)) {
+            npm install -g omniroute@latest --silent 2>$null
+        }
+    }
 
     Write-Host "[>] Encerrando instâncias antigas e loops de CMD..." -ForegroundColor Yellow
     Get-Process node, npx, cmd -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.MainWindowTitle -match "omniroute" } | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -126,48 +172,71 @@ if ($serverUp) {
 # [+] ETAPA 3: Autenticação OAuth & Geração de APPKEY no Dashboard
 # ------------------------------------------------------------------------------
 Write-Host "`n[+] [ETAPA 3/5] Conexão de Contas OAuth & Criação de APPKEY no Dashboard" -ForegroundColor Yellow
-Write-Host "[Web] Abrindo o Dashboard Web no navegador..." -ForegroundColor Cyan
-Start-Process "http://localhost:20128/dashboard"
 
-Write-Host "`n==============================================================================" -ForegroundColor White
-Write-Host "-> PASSO 1: GERAÇÃO DA APPKEY" -ForegroundColor Cyan
-Write-Host "   No navegador, vá na aba 'API Keys' (ou Settings) e clique em 'Create Key'." -ForegroundColor White
-Write-Host "==============================================================================" -ForegroundColor White
-
-$appKey = Read-Host "`n[KEY] Cole aqui a APPKEY gerada no Dashboard para automatizar os Combos (ex: sk-omni-...)"
-while ([string]::IsNullOrWhiteSpace($appKey)) {
-    Write-Host "[WARN] A APPKEY é obrigatória para configurar os Combos e IDEs de forma segura!" -ForegroundColor Yellow
-    $appKey = Read-Host "[KEY] Cole a APPKEY gerada no Dashboard"
+$existingKey = ""
+if (Test-Path $envFile) {
+    $lineKey = Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -match "^OMNIROUTE_API_KEY=" }
+    if ($lineKey) { $existingKey = $lineKey -replace "^OMNIROUTE_API_KEY=","" }
 }
 
-# Salva a APPKEY nas variáveis de ambiente e arquivos locais
-[Environment]::SetEnvironmentVariable("OMNIROUTE_API_KEY", $appKey, "User")
-$env:OMNIROUTE_API_KEY = $appKey
-"OMNIROUTE_API_KEY=$appKey" | Set-Content "$homeDir\.omniroute\.env" -Encoding UTF8
-"OMNIROUTE_API_KEY=$appKey" | Set-Content "$setupDir\.env" -Encoding UTF8
-Write-Host "[OK] APPKEY registrada nas variáveis do sistema e no ambiente local!" -ForegroundColor Green
-
-Write-Host "`n==============================================================================" -ForegroundColor White
-Write-Host "-> PASSO 2: CONFIGURAÇÃO DOS PROVEDORES DE IA (Um a Um)" -ForegroundColor Cyan
-Write-Host "   Agora vamos autenticar seus provedores na aba 'OAuth / Providers' do Dashboard." -ForegroundColor White
-Write-Host "==============================================================================" -ForegroundColor White
-
-$providers = @(
-    @{ name = "Anthropic (Claude)"; id = "anthropic" },
-    @{ name = "OpenAI / Codex"; id = "openai" },
-    @{ name = "GitHub Copilot"; id = "github-copilot" }
-)
-
-foreach ($prov in $providers) {
-    $resp = Read-Host "`n[?] Deseja conectar/configurar o provedor '$($prov.name)' agora? (s/n)"
-    if ($resp -match "^[sS]") {
-        Write-Host "  [Web] Abrindo a página de configuração no navegador..." -ForegroundColor Cyan
-        Start-Process "http://localhost:20128/dashboard"
-        Read-Host "  [...] Conecte a conta do '$($prov.name)' no Dashboard e pressione [ENTER] para continuar"
-    } else {
-        Write-Host "  [INFO] Provedor '$($prov.name)' pulado." -ForegroundColor DarkGray
+$skipWeb = $false
+if ($isReinstall -and [string]::IsNullOrWhiteSpace($existingKey) -eq $false) {
+    Write-Host "[OK] APPKEY existente detectada na sua instalação: $existingKey" -ForegroundColor Green
+    $reusar = Read-Host "[?] Deseja reutilizar esta APPKEY atual (s) ou gerar uma nova no Dashboard (n)? (Padrão: s)"
+    if ($reusar -notmatch "^[nN]") {
+        $appKey = $existingKey
+        $skipWeb = $true
+        Write-Host "[OK] Reutilizando APPKEY existente e mantendo provedores logados!" -ForegroundColor Green
     }
 }
+
+if (-not $skipWeb) {
+    Write-Host "[Web] Abrindo o Dashboard Web no navegador..." -ForegroundColor Cyan
+    Start-Process "http://localhost:20128/dashboard"
+
+    Write-Host "`n==============================================================================" -ForegroundColor White
+    Write-Host "-> PASSO 1: GERAÇÃO DA APPKEY" -ForegroundColor Cyan
+    Write-Host "   No navegador, vá na aba 'API Keys' (ou Settings) e clique em 'Create Key'." -ForegroundColor White
+    Write-Host "==============================================================================" -ForegroundColor White
+
+    $appKey = Read-Host "`n[KEY] Cole aqui a APPKEY gerada no Dashboard para automatizar os Combos (ex: sk-omni-...)"
+    while ([string]::IsNullOrWhiteSpace($appKey)) {
+        Write-Host "[WARN] A APPKEY é obrigatória para configurar os Combos e IDEs de forma segura!" -ForegroundColor Yellow
+        $appKey = Read-Host "[KEY] Cole a APPKEY gerada no Dashboard"
+    }
+
+    Write-Host "`n==============================================================================" -ForegroundColor White
+    Write-Host "-> PASSO 2: CONFIGURAÇÃO DOS PROVEDORES DE IA (Um a Um)" -ForegroundColor Cyan
+    Write-Host "   Agora vamos autenticar seus provedores na aba 'OAuth / Providers' do Dashboard." -ForegroundColor White
+    Write-Host "==============================================================================" -ForegroundColor White
+
+    $providers = @(
+        @{ name = "Anthropic (Claude)"; id = "anthropic" },
+        @{ name = "OpenAI / Codex"; id = "openai" },
+        @{ name = "GitHub Copilot"; id = "github-copilot" }
+    )
+
+    foreach ($prov in $providers) {
+        $resp = Read-Host "`n[?] Deseja conectar/configurar o provedor '$($prov.name)' agora? (s/n)"
+        if ($resp -match "^[sS]") {
+            Write-Host "  [Web] Abrindo a página de configuração no navegador..." -ForegroundColor Cyan
+            Start-Process "http://localhost:20128/dashboard"
+            Read-Host "  [...] Conecte a conta do '$($prov.name)' no Dashboard e pressione [ENTER] para continuar"
+        } else {
+            Write-Host "  [INFO] Provedor '$($prov.name)' pulado." -ForegroundColor DarkGray
+        }
+    }
+}
+
+# Salva a APPKEY preservando STORAGE_ENCRYPTION_KEY e outras variáveis do arquivo
+[Environment]::SetEnvironmentVariable("OMNIROUTE_API_KEY", $appKey, "User")
+$env:OMNIROUTE_API_KEY = $appKey
+$currentEnv = @()
+if (Test-Path $envFile) { $currentEnv = Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch "^OMNIROUTE_API_KEY=" } }
+$currentEnv += "OMNIROUTE_API_KEY=$appKey"
+Set-Content -Path $envFile -Value $currentEnv -Encoding UTF8
+"OMNIROUTE_API_KEY=$appKey" | Set-Content "$setupDir\.env" -Encoding UTF8
+Write-Host "[OK] APPKEY registrada nas variáveis do sistema e no ambiente local sem sobrescrever a criptografia!" -ForegroundColor Green
 
 # ------------------------------------------------------------------------------
 # [+] ETAPA 4: Configuração de Combos Padrão (Default Combos) via API
