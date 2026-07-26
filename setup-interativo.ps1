@@ -168,6 +168,7 @@ if ($modo -eq "1") {
     & $engine rm -f omniroute-gateway 2>$null
     if ($engine -eq "podman") {
         podman pod rm -f pod_omniroute-container-setup 2>$null
+        podman network rm omniroute-container-setup_default 2>$null
     }
     
     $containerSuccess = $false
