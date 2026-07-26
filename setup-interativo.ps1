@@ -1,5 +1,5 @@
 # ==============================================================================
-# [Setup Interativo] OmniRoute Gateway + Contas OAuth + IDEs Desktop (OpenHands & OpenCode)
+# [Setup Interativo] OmniRoute Gateway + Contas OAuth + IDEs Desktop (OpenCode & OpenHands)
 # Desenvolvido para Windows PowerShell (Suporte Híbrido: Docker/Podman ou Nativo)
 # ==============================================================================
 
@@ -22,24 +22,33 @@ if (-not (Test-Path "$homeDir\.omniroute")) { New-Item -Path "$homeDir\.omnirout
 if (-not (Test-Path "$homeDir\.omniroute\logs")) { New-Item -Path "$homeDir\.omniroute\logs" -ItemType Directory -Force | Out-Null }
 
 # ------------------------------------------------------------------------------
-# [+] Verificação de Reinstalação vs Nova Instalação
+# [+] ETAPA 1: Escolha do Modo de Instalação (Container ou Nativo Windows)
 # ------------------------------------------------------------------------------
-$isReinstall = $false
-if ((Test-Path $envFile) -and ((Test-Path "$homeDir\.omniroute\storage.sqlite") -or (Test-Path "$homeDir\.omniroute\data\storage.sqlite"))) {
-    $isReinstall = $true
-    Write-Host "`n[INFO] Instalação existente do OmniRoute detectada em ~/.omniroute!" -ForegroundColor Cyan
-    Write-Host "       Suas chaves de criptografia e bancos de dados serão PRESERVADOS para manter contas logadas e combos." -ForegroundColor Green
-    $respModo = Read-Host "[?] Deseja manter/atualizar a configuração atual (1) ou resetar tudo do zero (2)? (Padrão: 1)"
-    if ($respModo -eq "2") {
-        Write-Host "[WARN] Resetando banco de dados e arquivos antigos..." -ForegroundColor Yellow
-        Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.CommandLine -match "omniroute" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-        taskkill /F /IM node.exe 2>$null
-        Start-Sleep -Seconds 1
-        Remove-Item "$homeDir\.omniroute\*.sqlite*" -Force -ErrorAction SilentlyContinue
-        Remove-Item "$homeDir\.omniroute\data\*.sqlite*" -Force -ErrorAction SilentlyContinue
-        Remove-Item $envFile -Force -ErrorAction SilentlyContinue
-        $isReinstall = $false
-    }
+Write-Host "`n[+] [ETAPA 1/5] Escolha do Modo de Instalação e Execução" -ForegroundColor White
+Write-Host "  [1] [Docker/Podman] Container Isolado (Persistência Total Nativ a Linux)" -ForegroundColor Cyan
+Write-Host "  [2] [Local] Nativo no Windows (Node.js/NPM - Reset Limpo Automático)" -ForegroundColor Green
+$modo = Read-Host "`n-> Digite 1 ou 2 (Padrão: 2)"
+if ($modo -ne "1") { $modo = "2" }
+
+if ($modo -eq "1") {
+    "OMNIROUTE_MODE=container" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
+} else {
+    "OMNIROUTE_MODE=local" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
+}
+
+# ------------------------------------------------------------------------------
+# [+] Tratamento Arquitetural do Banco de Dados (Zero WASM Memory Corruption)
+# ------------------------------------------------------------------------------
+if ($modo -eq "2") {
+    Write-Host "`n[>] Modo Nativo Windows selecionado." -ForegroundColor Cyan
+    Write-Host "[>] Garantindo encerramento limpo de processos Node e inicialização de banco..." -ForegroundColor Cyan
+    Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.CommandLine -match "omniroute" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    taskkill /F /IM node.exe 2>$null
+    Start-Sleep -Seconds 1
+    
+    # No Windows Nativo, limpamos arquivos .sqlite residuais para garantir que o sql.js (WASM) abra sem out of memory
+    Remove-Item "$homeDir\.omniroute\*.sqlite*" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$homeDir\.omniroute\data\*.sqlite*" -Force -ErrorAction SilentlyContinue
 }
 
 # ------------------------------------------------------------------------------
@@ -58,21 +67,6 @@ if ($rawEnv -notmatch "STORAGE_ENCRYPTION_KEY=") {
 } else {
     Copy-Item -Path $envFile -Destination "$setupDir\.env" -Force -ErrorAction SilentlyContinue
     Write-Host "[OK] Chave STORAGE_ENCRYPTION_KEY permanente validada no ambiente." -ForegroundColor Green
-}
-
-# ------------------------------------------------------------------------------
-# [+] ETAPA 1: Escolha do Modo de Instalação (Container ou Nativo Windows)
-# ------------------------------------------------------------------------------
-Write-Host "`n[+] [ETAPA 1/5] Escolha do Modo de Instalação e Execução" -ForegroundColor White
-Write-Host "  [1] [Docker/Podman] Container Isolado - Sem alterar o sistema" -ForegroundColor Cyan
-Write-Host "  [2] [Local] Nativo no Windows (Node.js/NPM) - Sem precisar de Docker" -ForegroundColor Green
-$modo = Read-Host "`n-> Digite 1 ou 2 (Padrão: 2)"
-if ($modo -ne "1") { $modo = "2" }
-
-if ($modo -eq "1") {
-    "OMNIROUTE_MODE=container" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
-} else {
-    "OMNIROUTE_MODE=local" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
 }
 
 # ------------------------------------------------------------------------------
@@ -107,7 +101,7 @@ if ($modo -eq "1") {
 }
 
 # ------------------------------------------------------------------------------
-# [+] Iniciação Silenciosa do Servidor Gateway (Background sem travar terminal)
+# [+] Iniciação Silenciosa do Servidor Gateway
 # ------------------------------------------------------------------------------
 if ($modo -eq "1") {
     Write-Host "`n[Docker/Podman] Modo Container selecionado. Verificando motor..." -ForegroundColor Cyan
@@ -135,20 +129,8 @@ if ($modo -eq "1") {
         return
     }
     
-    if (-not $isReinstall) {
-        Write-Host "[>] Nova instalação detectada. Instalando OmniRoute globalmente via npm..." -ForegroundColor Cyan
-        npm install -g omniroute@latest --silent 2>$null
-    } else {
-        Write-Host "[>] Reinstalação/Atualização. Checando binário global do OmniRoute..." -ForegroundColor Cyan
-        if (-not (Get-Command "omniroute" -ErrorAction SilentlyContinue)) {
-            npm install -g omniroute@latest --silent 2>$null
-        }
-    }
-
-    Write-Host "[>] Encerrando instâncias antigas e processos zumbis..." -ForegroundColor Yellow
-    Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.CommandLine -match "omniroute" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    taskkill /F /IM node.exe 2>$null
-    Start-Sleep -Seconds 2
+    Write-Host "[>] Instalando/Atualizando OmniRoute globalmente via npm..." -ForegroundColor Cyan
+    npm install -g omniroute@latest --silent 2>$null
 
     Write-Host "[>] Iniciando Gateway nativo em segundo plano (Modo Invisível)..." -ForegroundColor Cyan
     $cmdArgs = "/c `"set NODE_OPTIONS=--max-old-space-size=4096&& set PORT=20128&& set ENABLE_RTK=true&& set CAVEMAN_MODE=true&& omniroute serve --port 20128 --no-open > `"$logFile`" 2>&1`""
@@ -172,59 +154,31 @@ if ($serverUp) {
 }
 
 # ------------------------------------------------------------------------------
-# [+] ETAPA 3: Autenticação OAuth & Geração/Validação de APPKEY no Dashboard
+# [+] ETAPA 3: Autenticação OAuth & Geração de APPKEY no Dashboard
 # ------------------------------------------------------------------------------
 Write-Host "`n[+] [ETAPA 3/5] Conexão de Contas OAuth & Criação de APPKEY no Dashboard" -ForegroundColor Yellow
 
-$existingKey = ""
-if (Test-Path $envFile) {
-    $lineKey = Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -match "^OMNIROUTE_API_KEY=" }
-    if ($lineKey) { $existingKey = $lineKey -replace "^OMNIROUTE_API_KEY=","" }
+Write-Host "[Web] Abrindo o Dashboard Web no navegador..." -ForegroundColor Cyan
+Start-Process "http://localhost:20128/dashboard"
+
+Write-Host "`n==============================================================================" -ForegroundColor White
+Write-Host "-> PASSO 1: GERAÇÃO DA APPKEY" -ForegroundColor Cyan
+Write-Host "   No navegador, vá na aba 'API Keys' (ou Settings) e clique em 'Create Key'." -ForegroundColor White
+Write-Host "==============================================================================" -ForegroundColor White
+
+$appKey = Read-Host "`n[KEY] Cole aqui a APPKEY gerada no Dashboard (ex: sk-omni-...)"
+while ([string]::IsNullOrWhiteSpace($appKey)) {
+    Write-Host "[WARN] A APPKEY é obrigatória para configurar os Combos e IDEs de forma segura!" -ForegroundColor Yellow
+    $appKey = Read-Host "[KEY] Cole a APPKEY gerada no Dashboard"
 }
 
-# Valida se a APPKEY existente realmente funciona no servidor atual (sem 401 ou 500)
-$isValidExistingKey = $false
-if (-not [string]::IsNullOrWhiteSpace($existingKey)) {
-    try {
-        $testApi = Invoke-RestMethod -Uri "http://localhost:20128/api/combos" -Method Get -Headers @{ "Authorization" = "Bearer $existingKey" } -TimeoutSec 4 -ErrorAction Stop
-        $isValidExistingKey = $true
-    } catch {}
-}
-
-$skipWeb = $false
-if ($isValidExistingKey) {
-    Write-Host "[OK] APPKEY existente validada com sucesso no Gateway: $existingKey" -ForegroundColor Green
-    $reusar = Read-Host "[?] Deseja reutilizar esta APPKEY e manter seus combos (s/n)? (Padrão: s)"
-    if ($reusar -notmatch "^[nN]") {
-        $appKey = $existingKey
-        $skipWeb = $true
-        Write-Host "[OK] APPKEY reutilizada com sucesso!" -ForegroundColor Green
-    }
-}
-
-if (-not $skipWeb) {
-    Write-Host "[Web] Abrindo o Dashboard Web no navegador..." -ForegroundColor Cyan
-    Start-Process "http://localhost:20128/dashboard"
-
-    Write-Host "`n==============================================================================" -ForegroundColor White
-    Write-Host "-> PASSO 1: GERAÇÃO DA APPKEY" -ForegroundColor Cyan
-    Write-Host "   No navegador, vá na aba 'API Keys' (ou Settings) e clique em 'Create Key'." -ForegroundColor White
-    Write-Host "==============================================================================" -ForegroundColor White
-
-    $appKey = Read-Host "`n[KEY] Cole aqui a APPKEY gerada no Dashboard (ex: sk-omni-...)"
-    while ([string]::IsNullOrWhiteSpace($appKey)) {
-        Write-Host "[WARN] A APPKEY é obrigatória para configurar os Combos e IDEs de forma segura!" -ForegroundColor Yellow
-        $appKey = Read-Host "[KEY] Cole a APPKEY gerada no Dashboard"
-    }
-
-    Write-Host "`n==============================================================================" -ForegroundColor White
-    Write-Host "-> PASSO 2: AUTENTICAÇÃO DOS SEUS PROVEDORES DE IA" -ForegroundColor Cyan
-    Write-Host "   Abrindo o Dashboard na aba de Provedores/OAuth..." -ForegroundColor White
-    Write-Host "   No navegador, conecte as contas dos provedores que você possui (Claude, OpenAI, Copilot, etc.)." -ForegroundColor White
-    Write-Host "==============================================================================" -ForegroundColor White
-    Start-Process "http://localhost:20128/dashboard"
-    Read-Host "`n[?] Após conectar seus provedores no Dashboard, pressione [ENTER] para continuar"
-}
+Write-Host "`n==============================================================================" -ForegroundColor White
+Write-Host "-> PASSO 2: AUTENTICAÇÃO DOS SEUS PROVEDORES DE IA" -ForegroundColor Cyan
+Write-Host "   Abrindo o Dashboard na aba de Provedores/OAuth..." -ForegroundColor White
+Write-Host "   No navegador, conecte as contas dos provedores que você possui (Claude, OpenAI, Copilot, etc.)." -ForegroundColor White
+Write-Host "==============================================================================" -ForegroundColor White
+Start-Process "http://localhost:20128/dashboard"
+Read-Host "`n[?] Após conectar seus provedores no Dashboard, pressione [ENTER] para continuar"
 
 # Preserva STORAGE_ENCRYPTION_KEY ao salvar OMNIROUTE_API_KEY
 [Environment]::SetEnvironmentVariable("OMNIROUTE_API_KEY", $appKey, "User")
@@ -327,8 +281,37 @@ Write-Host "  [4] Pular instalação de IDEs agora" -ForegroundColor DarkGray
 $opcaoIDE = Read-Host "`n-> Escolha sua opção de IDE (1, 2, 3 ou 4) [Padrão: 1]"
 if ([string]::IsNullOrWhiteSpace($opcaoIDE)) { $opcaoIDE = "1" }
 
-# Instalação e Injeção Automática do OpenHands
+# Instalação e Injeção Automática do OpenCode
 if ($opcaoIDE -eq "1" -or $opcaoIDE -eq "3") {
+    Write-Host "`n[>] [Instalação OpenCode] Verificando ambiente..." -ForegroundColor Cyan
+    if (Get-Command "npm" -ErrorAction SilentlyContinue) {
+        Write-Host "   [>] Instalando 'opencode-ai' globalmente via npm..." -ForegroundColor Cyan
+        npm install -g opencode-ai --silent 2>$null
+        if (Get-Command "opencode" -ErrorAction SilentlyContinue) {
+            Write-Host "   [OK] OpenCode instalado com sucesso no sistema!" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "   [INFO] npm não disponível. Baixe o instalador desktop do OpenCode em: https://opencode.ai" -ForegroundColor Yellow
+    }
+
+    # Injeção Automática do Arquivo de Configuração do OpenCode (~/.opencode/config.json e APPDATA)
+    $opencodeDirs = @("$homeDir\.opencode", "$env:APPDATA\opencode")
+    foreach ($dir in $opencodeDirs) {
+        if (-not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
+        $opencodeConfig = @{
+            provider = "openai-compatible"
+            baseUrl = "http://localhost:20128/v1"
+            apiKey = $appKey
+            model = "combo-coding"
+        } | ConvertTo-Json -Depth 5
+        Set-Content -Path "$dir\config.json" -Value $opencodeConfig -Encoding UTF8
+    }
+    Write-Host "  [OK] Configuração injetada automaticamente para o OpenCode Desktop & CLI!" -ForegroundColor Green
+    Write-Host "  [INFO] Digite 'opencode' no terminal ou abra o aplicativo desktop." -ForegroundColor Cyan
+}
+
+# Instalação e Injeção Automática do OpenHands
+if ($opcaoIDE -eq "2" -or $opcaoIDE -eq "3") {
     Write-Host "`n[>] [Instalação OpenHands] Verificando ambiente..." -ForegroundColor Cyan
     
     $openhandsInstalled = $false
@@ -407,35 +390,6 @@ if ($opcaoIDE -eq "1" -or $opcaoIDE -eq "3") {
     } else {
         Write-Host "  [WARN] O serviço do OpenHands está inicializando. Abra o aplicativo pelo ícone 'OpenHands Desktop' na sua Área de Trabalho!" -ForegroundColor Yellow
     }
-}
-
-# Instalação e Injeção Automática do OpenCode
-if ($opcaoIDE -eq "2" -or $opcaoIDE -eq "3") {
-    Write-Host "`n[>] [Instalação OpenCode] Verificando ambiente..." -ForegroundColor Cyan
-    if (Get-Command "npm" -ErrorAction SilentlyContinue) {
-        Write-Host "   [>] Instalando 'opencode-ai' globalmente via npm..." -ForegroundColor Cyan
-        npm install -g opencode-ai --silent 2>$null
-        if (Get-Command "opencode" -ErrorAction SilentlyContinue) {
-            Write-Host "   [OK] OpenCode instalado com sucesso no sistema!" -ForegroundColor Green
-        }
-    } else {
-        Write-Host "   [INFO] npm não disponível. Baixe o instalador desktop do OpenCode em: https://opencode.ai" -ForegroundColor Yellow
-    }
-
-    # Injeção Automática do Arquivo de Configuração do OpenCode (~/.opencode/config.json e APPDATA)
-    $opencodeDirs = @("$homeDir\.opencode", "$env:APPDATA\opencode")
-    foreach ($dir in $opencodeDirs) {
-        if (-not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
-        $opencodeConfig = @{
-            provider = "openai-compatible"
-            baseUrl = "http://localhost:20128/v1"
-            apiKey = $appKey
-            model = "combo-coding"
-        } | ConvertTo-Json -Depth 5
-        Set-Content -Path "$dir\config.json" -Value $opencodeConfig -Encoding UTF8
-    }
-    Write-Host "  [OK] Configuração injetada automaticamente para o OpenCode Desktop & CLI!" -ForegroundColor Green
-    Write-Host "  [INFO] Digite 'opencode' no terminal ou abra o aplicativo desktop." -ForegroundColor Cyan
 }
 
 if ($opcaoIDE -eq "4") {
