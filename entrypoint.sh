@@ -94,10 +94,10 @@ echo "=========================================================="
 while true; do
     echo "[OmniRoute] Subindo servidor na porta ${PORT:-20128} (http://0.0.0.0:${PORT:-20128})..."
     if command -v omniroute >/dev/null 2>&1; then
-        omniroute serve --port ${PORT:-20128} --host 0.0.0.0 --no-open || true
+        omniroute serve --port ${PORT:-20128} --no-open || true
     else
         echo "[INFO] Binário global não encontrado no PATH, executando via npx..."
-        npx -y omniroute@latest serve --port ${PORT:-20128} --host 0.0.0.0 --no-open || true
+        npx -y omniroute@latest serve --port ${PORT:-20128} --no-open || true
     fi
     echo "[WARN] Processo do Gateway suspenso. Reabrindo em 2 segundos..."
     sleep 2

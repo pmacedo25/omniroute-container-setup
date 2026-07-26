@@ -1,12 +1,12 @@
 version: '3.8'
 
 services:
-  omniroute:
+  omniroute-custom:
     build: 
       context: .
       dockerfile: Dockerfile
     image: omniroute-custom:latest
-    container_name: omniroute-gateway
+    container_name: omniroute-custom
     restart: unless-stopped
     tty: true
     stdin_open: true
