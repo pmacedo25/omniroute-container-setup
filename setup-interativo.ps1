@@ -1,13 +1,13 @@
 # ==============================================================================
-# [Setup Interativo] OmniRoute Gateway + Contas OAuth + IDEs Focadas em IA
-# Desenvolvido para Windows PowerShell (Suporte a Docker/Podman ou Nativo)
+# [Setup Interativo] OmniRoute Gateway + Contas OAuth + IDEs Desktop (OpenHands & OpenCode)
+# Desenvolvido para Windows PowerShell (Suporte Híbrido: Docker/Podman ou Nativo)
 # ==============================================================================
 
 $OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PATH += ";$env:APPDATA\npm;C:\Program Files\nodejs;C:\Program Files (x86)\nodejs"
 
 Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "=== ASSISTENTE DE SETUP OMNIROUTE 2026 (ROTEAMENTO & COMBOS) ===" -ForegroundColor Yellow
+Write-Host "=== ASSISTENTE DE SETUP OMNIROUTE 2026 (ROTEAMENTO, COMBOS & AGENTES) ===" -ForegroundColor Yellow
 Write-Host "==============================================================================" -ForegroundColor Cyan
 
 $setupDir = $PSScriptRoot
@@ -25,10 +25,10 @@ if (-not (Test-Path "$homeDir\.omniroute\logs")) { New-Item -Path "$homeDir\.omn
 # [+] Verificação de Reinstalação vs Nova Instalação
 # ------------------------------------------------------------------------------
 $isReinstall = $false
-if ((Test-Path $envFile) -and ((Test-Path "$homeDir\.omniroute\storage.sqlite") -or (Test-Path "$homeDir\.omniroute\data\storage.sqlite") -or (Test-Path "$homeDir\.omniroute\storage.sqlite3"))) {
+if ((Test-Path $envFile) -and ((Test-Path "$homeDir\.omniroute\storage.sqlite") -or (Test-Path "$homeDir\.omniroute\data\storage.sqlite"))) {
     $isReinstall = $true
     Write-Host "`n[INFO] Instalação existente do OmniRoute detectada em ~/.omniroute!" -ForegroundColor Cyan
-    Write-Host "       Suas chaves de criptografia e bancos de dados serão PRESERVADOS (evitando perda de contas)." -ForegroundColor Green
+    Write-Host "       Suas chaves de criptografia e bancos de dados serão PRESERVADOS para manter contas logadas e combos." -ForegroundColor Green
     $respModo = Read-Host "[?] Deseja manter/atualizar a configuração atual (1) ou resetar tudo do zero (2)? (Padrão: 1)"
     if ($respModo -eq "2") {
         Write-Host "[WARN] Resetando banco de dados e arquivos antigos..." -ForegroundColor Yellow
@@ -42,21 +42,21 @@ if ((Test-Path $envFile) -and ((Test-Path "$homeDir\.omniroute\storage.sqlite") 
 }
 
 # ------------------------------------------------------------------------------
-# [+] Garantia de STORAGE_ENCRYPTION_KEY (Prevenção de Internal Error no Dashboard)
+# [+] Garantia de STORAGE_ENCRYPTION_KEY Única e Permanente
 # ------------------------------------------------------------------------------
-# Se a chave de criptografia do banco não existir, gera e salva ANTES de iniciar o servidor
 $rawEnv = ""
 if (Test-Path $envFile) { $rawEnv = Get-Content $envFile -Raw -ErrorAction SilentlyContinue }
+
 if ($rawEnv -notmatch "STORAGE_ENCRYPTION_KEY=") {
     Write-Host "[>] Gerando STORAGE_ENCRYPTION_KEY para proteger o banco SQLite..." -ForegroundColor Cyan
     $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
     $hexKey = [System.BitConverter]::ToString($bytes) -replace '-',''
     Add-Content -Path $envFile -Value "`nSTORAGE_ENCRYPTION_KEY=$hexKey" -Encoding UTF8
     Copy-Item -Path $envFile -Destination "$setupDir\.env" -Force -ErrorAction SilentlyContinue
-    Write-Host "[OK] Chave de criptografia registrada no ambiente local e contêiner!" -ForegroundColor Green
+    Write-Host "[OK] Chave de criptografia única criada e registrada no ambiente!" -ForegroundColor Green
 } else {
     Copy-Item -Path $envFile -Destination "$setupDir\.env" -Force -ErrorAction SilentlyContinue
-    Write-Host "[OK] Chave STORAGE_ENCRYPTION_KEY existente validada no ambiente." -ForegroundColor Green
+    Write-Host "[OK] Chave STORAGE_ENCRYPTION_KEY permanente validada no ambiente." -ForegroundColor Green
 }
 
 # ------------------------------------------------------------------------------
@@ -80,7 +80,7 @@ if ($modo -eq "1") {
 Write-Host "`n[+] [ETAPA 2/5] Configuração do Repositório de Skills & Inicialização do Servidor" -ForegroundColor Yellow
 
 $defaultRepo = "https://github.com/pmacedo25/project-agents-templates.git"
-Write-Host "[INFO] O OmniRoute pode carregar agentes, prompts e skills de repositórios Git." -ForegroundColor White
+Write-Host "[INFO] O OmniRoute carrega agentes, prompts e skills de repositórios Git." -ForegroundColor White
 $repoUrl = Read-Host "-> Digite a URL do repositório Git de Skills (Padrão: $defaultRepo)"
 if ([string]::IsNullOrWhiteSpace($repoUrl)) { $repoUrl = $defaultRepo }
 
@@ -106,7 +106,7 @@ if ($modo -eq "1") {
 }
 
 # ------------------------------------------------------------------------------
-# [+] Iniciação Silenciosa do Servidor Gateway
+# [+] Iniciação Silenciosa do Servidor Gateway (Background sem travar terminal)
 # ------------------------------------------------------------------------------
 if ($modo -eq "1") {
     Write-Host "`n[Docker/Podman] Modo Container selecionado. Verificando motor..." -ForegroundColor Cyan
@@ -170,7 +170,7 @@ if ($serverUp) {
 }
 
 # ------------------------------------------------------------------------------
-# [+] ETAPA 3: Autenticação OAuth & Geração de APPKEY no Dashboard
+# [+] ETAPA 3: Autenticação OAuth & Geração/Validação de APPKEY no Dashboard
 # ------------------------------------------------------------------------------
 Write-Host "`n[+] [ETAPA 3/5] Conexão de Contas OAuth & Criação de APPKEY no Dashboard" -ForegroundColor Yellow
 
@@ -180,14 +180,23 @@ if (Test-Path $envFile) {
     if ($lineKey) { $existingKey = $lineKey -replace "^OMNIROUTE_API_KEY=","" }
 }
 
+# Valida se a APPKEY existente realmente funciona no servidor atual (sem 401 ou 500)
+$isValidExistingKey = $false
+if (-not [string]::IsNullOrWhiteSpace($existingKey)) {
+    try {
+        $testApi = Invoke-RestMethod -Uri "http://localhost:20128/api/combos" -Method Get -Headers @{ "Authorization" = "Bearer $existingKey" } -TimeoutSec 4 -ErrorAction Stop
+        $isValidExistingKey = $true
+    } catch {}
+}
+
 $skipWeb = $false
-if ($isReinstall -and [string]::IsNullOrWhiteSpace($existingKey) -eq $false) {
-    Write-Host "[OK] APPKEY existente detectada na sua instalação: $existingKey" -ForegroundColor Green
-    $reusar = Read-Host "[?] Deseja reutilizar esta APPKEY atual (s) ou gerar uma nova no Dashboard (n)? (Padrão: s)"
+if ($isValidExistingKey) {
+    Write-Host "[OK] APPKEY existente validada com sucesso no Gateway: $existingKey" -ForegroundColor Green
+    $reusar = Read-Host "[?] Deseja reutilizar esta APPKEY e manter seus combos (s/n)? (Padrão: s)"
     if ($reusar -notmatch "^[nN]") {
         $appKey = $existingKey
         $skipWeb = $true
-        Write-Host "[OK] Reutilizando APPKEY existente e mantendo provedores logados!" -ForegroundColor Green
+        Write-Host "[OK] APPKEY reutilizada com sucesso!" -ForegroundColor Green
     }
 }
 
@@ -200,7 +209,7 @@ if (-not $skipWeb) {
     Write-Host "   No navegador, vá na aba 'API Keys' (ou Settings) e clique em 'Create Key'." -ForegroundColor White
     Write-Host "==============================================================================" -ForegroundColor White
 
-    $appKey = Read-Host "`n[KEY] Cole aqui a APPKEY gerada no Dashboard para automatizar os Combos (ex: sk-omni-...)"
+    $appKey = Read-Host "`n[KEY] Cole aqui a APPKEY gerada no Dashboard (ex: sk-omni-...)"
     while ([string]::IsNullOrWhiteSpace($appKey)) {
         Write-Host "[WARN] A APPKEY é obrigatória para configurar os Combos e IDEs de forma segura!" -ForegroundColor Yellow
         $appKey = Read-Host "[KEY] Cole a APPKEY gerada no Dashboard"
@@ -229,18 +238,19 @@ if (-not $skipWeb) {
     }
 }
 
-# Salva a APPKEY preservando STORAGE_ENCRYPTION_KEY e outras variáveis do arquivo
+# Preserva STORAGE_ENCRYPTION_KEY ao salvar OMNIROUTE_API_KEY
 [Environment]::SetEnvironmentVariable("OMNIROUTE_API_KEY", $appKey, "User")
 $env:OMNIROUTE_API_KEY = $appKey
-$currentEnv = @()
-if (Test-Path $envFile) { $currentEnv = Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch "^OMNIROUTE_API_KEY=" } }
-$currentEnv += "OMNIROUTE_API_KEY=$appKey"
-Set-Content -Path $envFile -Value $currentEnv -Encoding UTF8
+
+$currentEnvLines = @()
+if (Test-Path $envFile) { $currentEnvLines = Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch "^OMNIROUTE_API_KEY=" } }
+$currentEnvLines += "OMNIROUTE_API_KEY=$appKey"
+Set-Content -Path $envFile -Value $currentEnvLines -Encoding UTF8
 Copy-Item -Path $envFile -Destination "$setupDir\.env" -Force -ErrorAction SilentlyContinue
 Write-Host "[OK] APPKEY registrada nas variáveis do sistema e no ambiente (Local e Contêiner)!" -ForegroundColor Green
 
 # ------------------------------------------------------------------------------
-# [+] ETAPA 4: Configuração de Combos Padrão (Default Combos) via API
+# [+] ETAPA 4: Configuração de Combos Padrão (Default Combos) via API REST
 # ------------------------------------------------------------------------------
 Write-Host "`n[+] [ETAPA 4/5] Criando e Mapeando os Combos Padrão via API REST..." -ForegroundColor Yellow
 
@@ -318,47 +328,20 @@ try {
 }
 
 # ------------------------------------------------------------------------------
-# [+] ETAPA 5: Escolha, Instalação e Configuração da IDE Desktop (OpenCode / OpenHands)
+# [+] ETAPA 5: Escolha, Instalação e Injeção Automática de Configuração na IDE Desktop
 # ------------------------------------------------------------------------------
-Write-Host "`n[+] [ETAPA 5/5] Escolha e Instalação da IDE Desktop (Sem Login / 100% BYOK)..." -ForegroundColor Yellow
-Write-Host "  [1] OpenCode (IDE / CLI Desktop 100% BYOK - Instalação via npm / Scoop)" -ForegroundColor Cyan
-Write-Host "  [2] OpenHands (Plataforma Agente Autônoma - Instalação via Python pip / Docker)" -ForegroundColor Green
-Write-Host "  [3] Instalar Ambas (OpenCode e OpenHands)" -ForegroundColor Yellow
-Write-Host "  [4] Pular instalação de IDEs agora (Apenas visualizar instruções de configuração)" -ForegroundColor DarkGray
+Write-Host "`n[+] [ETAPA 5/5] Escolha, Instalação e Automação da IDE Desktop (Sem Login / 100% BYOK)..." -ForegroundColor Yellow
+Write-Host "  [1] OpenHands (Plataforma Agente Autônoma - Instalação & Auto-Config) [PADRÃO]" -ForegroundColor Green
+Write-Host "  [2] OpenCode (IDE / CLI Desktop 100% BYOK - Instalação via npm & Auto-Config)" -ForegroundColor Cyan
+Write-Host "  [3] Instalar e Configurar Ambas (OpenHands e OpenCode)" -ForegroundColor Yellow
+Write-Host "  [4] Pular instalação de IDEs agora" -ForegroundColor DarkGray
 
 $opcaoIDE = Read-Host "`n-> Escolha sua opção de IDE (1, 2, 3 ou 4) [Padrão: 1]"
 if ([string]::IsNullOrWhiteSpace($opcaoIDE)) { $opcaoIDE = "1" }
 
-# Instalação e Configuração do OpenCode
+# Instalação e Injeção Automática do OpenHands
 if ($opcaoIDE -eq "1" -or $opcaoIDE -eq "3") {
-    Write-Host "`n[>] [Instalação] Verificando e Instalando OpenCode..." -ForegroundColor Cyan
-    if (Get-Command "npm" -ErrorAction SilentlyContinue) {
-        Write-Host "   [>] Instalando 'opencode-ai' globalmente via npm..." -ForegroundColor Cyan
-        npm install -g opencode-ai --silent 2>$null
-        if (Get-Command "opencode" -ErrorAction SilentlyContinue) {
-            Write-Host "   [OK] OpenCode instalado com sucesso no sistema!" -ForegroundColor Green
-        } else {
-            Write-Host "   [INFO] Pacote opencode-ai baixado via npm." -ForegroundColor Cyan
-        }
-    } else {
-        Write-Host "   [INFO] npm não disponível. Baixe o instalador desktop do OpenCode em: https://opencode.ai" -ForegroundColor Yellow
-    }
-
-    Write-Host "`n==============================================================================" -ForegroundColor White
-    Write-Host "-> DIREIONAMENTO DE CONFIGURAÇÃO PARA OPENCODE DESKTOP / CLI:" -ForegroundColor Cyan
-    Write-Host "  1. Abra o OpenCode (ou digite 'opencode' no terminal)." -ForegroundColor White
-    Write-Host "  2. Acesse Settings / Provider Settings -> selecione 'OpenAI Compatible'." -ForegroundColor White
-    Write-Host "  3. Configurações de Conexão:" -ForegroundColor White
-    Write-Host "     - Base URL : http://localhost:20128/v1" -ForegroundColor White
-    Write-Host "     - API Key  : $appKey" -ForegroundColor White
-    Write-Host "     - Modelo   : combo-coding (ou selecione no menu suspenso)" -ForegroundColor White
-    Write-Host "==============================================================================" -ForegroundColor White
-    Read-Host "[?] Concluiu a configuração do OpenCode? Pressione [ENTER] para continuar"
-}
-
-# Instalação e Configuração do OpenHands
-if ($opcaoIDE -eq "2" -or $opcaoIDE -eq "3") {
-    Write-Host "`n[>] [Instalação] Verificando e Instalando OpenHands..." -ForegroundColor Cyan
+    Write-Host "`n[>] [Instalação OpenHands] Verificando ambiente..." -ForegroundColor Cyan
     if (Get-Command "pip" -ErrorAction SilentlyContinue) {
         Write-Host "   [>] Instalando 'openhands' via Python pip..." -ForegroundColor Cyan
         pip install openhands --quiet 2>$null
@@ -368,24 +351,60 @@ if ($opcaoIDE -eq "2" -or $opcaoIDE -eq "3") {
         docker run -d --name openhands-app -p 3000:3000 ghcr.io/openhands/agent-server:latest 2>$null
         Write-Host "   [OK] Contêiner do OpenHands iniciado na porta 3000!" -ForegroundColor Green
     } else {
-        Write-Host "   [INFO] Para instalar o OpenHands, use 'pip install openhands' ou acesse: https://openhands.dev" -ForegroundColor Yellow
+        Write-Host "   [INFO] Para instalar o OpenHands desktop, acesse: https://openhands.dev" -ForegroundColor Yellow
     }
 
-    Write-Host "`n==============================================================================" -ForegroundColor White
-    Write-Host "-> DIREIONAMENTO DE CONFIGURAÇÃO PARA OPENHANDS DESKTOP:" -ForegroundColor Cyan
-    Write-Host "  1. Abra o OpenHands (ou navegue para http://localhost:3000)." -ForegroundColor White
-    Write-Host "  2. Clique em Settings (engrenagem) -> aba LLM -> ative 'Advanced options'." -ForegroundColor White
-    Write-Host "  3. Configurações de Conexão:" -ForegroundColor White
-    Write-Host "     - Custom Model: combo-coding" -ForegroundColor White
-    Write-Host "     - Base URL    : http://localhost:20128/v1" -ForegroundColor White
-    Write-Host "       (Obs: Se rodar o OpenHands em Docker, use: http://host.docker.internal:20128/v1)" -ForegroundColor DarkGray
-    Write-Host "     - API Key     : $appKey" -ForegroundColor White
-    Write-Host "==============================================================================" -ForegroundColor White
-    Read-Host "[?] Concluiu a configuração do OpenHands? Pressione [ENTER] para continuar"
+    # Injeção Automática do Arquivo de Configuração do OpenHands (~/.openhands/agent_settings.json)
+    $openhandsDir = "$homeDir\.openhands"
+    if (-not (Test-Path $openhandsDir)) { New-Item -Path $openhandsDir -ItemType Directory -Force | Out-Null }
+    
+    $openhandsConfig = @{
+        llm = @{
+            model = "combo-coding"
+            base_url = "http://localhost:20128/v1"
+            api_key = $appKey
+        }
+    } | ConvertTo-Json -Depth 5
+
+    Set-Content -Path "$openhandsDir\agent_settings.json" -Value $openhandsConfig -Encoding UTF8
+    [Environment]::SetEnvironmentVariable("LLM_MODEL", "combo-coding", "User")
+    [Environment]::SetEnvironmentVariable("LLM_BASE_URL", "http://localhost:20128/v1", "User")
+    [Environment]::SetEnvironmentVariable("LLM_API_KEY", $appKey, "User")
+    Write-Host "  [OK] Configuração injetada em ~/.openhands/agent_settings.json e variáveis do sistema!" -ForegroundColor Green
+    Write-Host "  [Web] Acesse o OpenHands na porta 3000 (http://localhost:3000) ou pelo app desktop." -ForegroundColor Cyan
+}
+
+# Instalação e Injeção Automática do OpenCode
+if ($opcaoIDE -eq "2" -or $opcaoIDE -eq "3") {
+    Write-Host "`n[>] [Instalação OpenCode] Verificando ambiente..." -ForegroundColor Cyan
+    if (Get-Command "npm" -ErrorAction SilentlyContinue) {
+        Write-Host "   [>] Instalando 'opencode-ai' globalmente via npm..." -ForegroundColor Cyan
+        npm install -g opencode-ai --silent 2>$null
+        if (Get-Command "opencode" -ErrorAction SilentlyContinue) {
+            Write-Host "   [OK] OpenCode instalado com sucesso no sistema!" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "   [INFO] npm não disponível. Baixe o instalador desktop do OpenCode em: https://opencode.ai" -ForegroundColor Yellow
+    }
+
+    # Injeção Automática do Arquivo de Configuração do OpenCode (~/.opencode/config.json e APPDATA)
+    $opencodeDirs = @("$homeDir\.opencode", "$env:APPDATA\opencode")
+    foreach ($dir in $opencodeDirs) {
+        if (-not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
+        $opencodeConfig = @{
+            provider = "openai-compatible"
+            baseUrl = "http://localhost:20128/v1"
+            apiKey = $appKey
+            model = "combo-coding"
+        } | ConvertTo-Json -Depth 5
+        Set-Content -Path "$dir\config.json" -Value $opencodeConfig -Encoding UTF8
+    }
+    Write-Host "  [OK] Configuração injetada automaticamente para o OpenCode Desktop & CLI!" -ForegroundColor Green
+    Write-Host "  [INFO] Digite 'opencode' no terminal ou abra o aplicativo desktop." -ForegroundColor Cyan
 }
 
 if ($opcaoIDE -eq "4") {
-    Write-Host "[INFO] Instalação de IDEs pulada. Você pode instalar o OpenCode (https://opencode.ai) ou OpenHands (https://openhands.dev) quando quiser!" -ForegroundColor DarkGray
+    Write-Host "[INFO] Instalação de IDEs pulada. Você pode instalar o OpenHands (https://openhands.dev) ou OpenCode (https://opencode.ai) quando quiser!" -ForegroundColor DarkGray
 }
 
 # ------------------------------------------------------------------------------
