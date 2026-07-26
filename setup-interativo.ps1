@@ -123,14 +123,34 @@ if ($modo -eq "1") {
     Invoke-Expression "$engine compose up -d --build"
     Pop-Location
 } else {
-    Write-Host "`n[Local] Verificando Node.js / NPM..." -ForegroundColor Cyan
-    if (-not (Get-Command "node" -ErrorAction SilentlyContinue)) {
-        Write-Host "[ERROR] Node.js não encontrado no PATH! Instale o Node.js 20+ no Windows antes de continuar." -ForegroundColor Red
-        return
-    }
+    Write-Host "`n[Local] Verificando compilador C++ (Visual Studio Build Tools) para driver nativo better-sqlite3..." -ForegroundColor Cyan
+    $hasCPP = $false
+    if (Get-Command "cl.exe" -ErrorAction SilentlyContinue) { $hasCPP = $true }
     
+    if (-not $hasCPP) {
+        Write-Host "[INFO] O Windows não possui o compilador C++ do Visual Studio instalado no PATH." -ForegroundColor Yellow
+        Write-Host "       Sem C++, o Node.js utiliza o 'sql.js' (driver WebAssembly em memória)." -ForegroundColor Yellow
+        Write-Host "       Instalar os C++ Build Tools habilita o 'better-sqlite3' (driver C++ nativo e rápido, sem estouro de memória WASM e com persistência total em reinstalações)." -ForegroundColor Green
+        
+        $instCPP = Read-Host "[?] Deseja instalar os C++ Build Tools do Windows via winget agora? (s/n - Padrão: n)"
+        if ($instCPP -match "^[sS]") {
+            if (Get-Command "winget" -ErrorAction SilentlyContinue) {
+                Write-Host "   [>] Baixando e instalando Visual Studio C++ Build Tools via winget (pode levar alguns minutos)..." -ForegroundColor Cyan
+                winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" 2>&1 | Out-Null
+                Write-Host "   [OK] C++ Build Tools instalado com sucesso!" -ForegroundColor Green
+                $hasCPP = $true
+            } else {
+                Write-Host "   [WARN] Utilitário winget não encontrado. Mantendo instalação padrão." -ForegroundColor Yellow
+            }
+        }
+    }
+
     Write-Host "[>] Instalando/Atualizando OmniRoute globalmente via npm..." -ForegroundColor Cyan
-    npm install -g omniroute@latest --silent 2>$null
+    if ($hasCPP) {
+        npm install -g omniroute@latest --build-from-source 2>$null
+    } else {
+        npm install -g omniroute@latest --silent 2>$null
+    }
 
     Write-Host "[>] Iniciando Gateway nativo em segundo plano (Modo Invisível)..." -ForegroundColor Cyan
     $cmdArgs = "/c `"set NODE_OPTIONS=--max-old-space-size=4096&& set PORT=20128&& set ENABLE_RTK=true&& set CAVEMAN_MODE=true&& omniroute serve --port 20128 --no-open > `"$logFile`" 2>&1`""
