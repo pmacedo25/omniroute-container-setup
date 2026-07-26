@@ -298,7 +298,20 @@ $instOpenHands = Read-Host "`n[?] Deseja instalar e configurar o OpenHands Deskt
 if ($instOpenHands -notmatch "^[nN]") {
     Write-Host "`n[>] [Instalação OpenHands] Verificando ambiente..." -ForegroundColor Cyan
     
-    # 1. Instalação do OpenHands via uv (gerenciador binário ultrarrápido sem necessidade de compilador Rust)
+    # 1. Checagem de Requisito do Docker Desktop para o OpenHands
+    if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
+        Write-Host "  [WARN] O OpenHands exige o Docker Desktop instalado para executar ações e agentes isolados." -ForegroundColor Yellow
+        $instDocker = Read-Host "  [?] Deseja instalar o Docker Desktop via winget agora? (s/n - Padrão: s)"
+        if ($instDocker -notmatch "^[nN]") {
+            if (Get-Command "winget" -ErrorAction SilentlyContinue) {
+                Write-Host "   [>] Baixando e instalando Docker Desktop via winget..." -ForegroundColor Cyan
+                winget install -e --id Docker.DockerDesktop 2>&1 | Out-Null
+                Write-Host "   [OK] Docker Desktop instalado! Abra o aplicativo 'Docker Desktop' no Windows para ativar o motor." -ForegroundColor Green
+            }
+        }
+    }
+
+    # 2. Instalação do OpenHands via uv (gerenciador binário ultrarrápido sem necessidade de compilador Rust)
     $openhandsInstalled = $false
     if (Get-Command "openhands" -ErrorAction SilentlyContinue) {
         $openhandsInstalled = $true
@@ -313,12 +326,7 @@ if ($instOpenHands -notmatch "^[nN]") {
         if (Get-Command "openhands" -ErrorAction SilentlyContinue) { $openhandsInstalled = $true }
     }
 
-    if (-not $openhandsInstalled -and (Get-Command "docker" -ErrorAction SilentlyContinue)) {
-        Write-Host "   [>] Docker detectado. Subindo o contêiner do OpenHands na porta 3000..." -ForegroundColor Cyan
-        docker run -d --name openhands-app -p 3000:3000 ghcr.io/openhands/agent-server:latest 2>$null
-    }
-
-    # 2. Injeção Automática do Arquivo de Configuração do OpenHands (~/.openhands/agent_settings.json)
+    # 3. Injeção Automática do Arquivo de Configuração do OpenHands (~/.openhands/agent_settings.json)
     $openhandsDir = "$homeDir\.openhands"
     $binDir = "$openhandsDir\bin"
     if (-not (Test-Path $binDir)) { New-Item -Path $binDir -ItemType Directory -Force | Out-Null }
@@ -337,16 +345,18 @@ if ($instOpenHands -notmatch "^[nN]") {
     [Environment]::SetEnvironmentVariable("LLM_API_KEY", $appKey, "User")
     Write-Host "  [OK] Configuração de LLM injetada em ~/.openhands/agent_settings.json!" -ForegroundColor Green
 
-    # 3. Criação do Script Lançador Autônomo (~/.openhands/bin/openhands-app.cmd)
-    # Este script garante que, ao clicar no atalho no Desktop, o servidor na porta 3000 é checado e iniciado automaticamente se estiver desligado.
+    # 4. Criação do Script Lançador Autônomo (~/.openhands/bin/openhands-app.cmd)
+    # Suporte a UTF-8 ativo (PYTHONIOENCODING=utf-8) para evitar travamento com emojis de console no Windows
     $launcherCmd = @"
 @echo off
 set "PATH=%PATH%;C:\Python314;C:\Python314\Scripts;%USERPROFILE%\AppData\Roaming\Python\Python314\Scripts;%USERPROFILE%\AppData\Roaming\uv\tools;%USERPROFILE%\.local\bin"
+set PYTHONIOENCODING=utf-8
+set PYTHONUTF8=1
 
 powershell -NoProfile -Command "Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet" | findstr /i "True" >nul 2>&1
 if errorlevel 1 (
     echo [OpenHands Desktop App] Iniciando servidor do agente na porta 3000...
-    start /B cmd /c "uv tool run openhands serve > "%USERPROFILE%\.openhands\server.log" 2>&1"
+    start /B cmd /c "set PYTHONIOENCODING=utf-8&& set PYTHONUTF8=1&& uv tool run openhands serve > "%USERPROFILE%\.openhands\server.log" 2>&1"
     powershell -NoProfile -Command "for (`$i=0; `$i -lt 15; `$i++) { if (Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet) { exit 0 }; Start-Sleep -Seconds 1 }; exit 1"
 )
 
