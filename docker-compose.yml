@@ -10,7 +10,7 @@ services:
     tty: true
     stdin_open: true
     ports:
-      - "20128:20128" # Porta padrão do OmniRoute / 9Router
+      - "20128:20128" # Porta padrão do OmniRoute Gateway
     env_file:
       - .env # Carrega variáveis locais geradas pelo setup (como OMNIROUTE_API_KEY)
     environment:

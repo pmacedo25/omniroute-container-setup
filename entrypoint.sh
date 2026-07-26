@@ -93,8 +93,6 @@ echo "=========================================================="
 # 6. Inicia o servidor Gateway (Sem --daemon para manter o container limpo)
 if command -v omniroute >/dev/null 2>&1; then
     exec omniroute serve --port ${PORT:-20128} --host 0.0.0.0 --no-open
-elif command -v 9router >/dev/null 2>&1; then
-    exec 9router serve --port ${PORT:-20128} --host 0.0.0.0 --no-open
 else
     echo "[INFO] Binário global não encontrado no PATH, executando via npx..."
     exec npx -y omniroute@latest serve --port ${PORT:-20128} --host 0.0.0.0 --no-open

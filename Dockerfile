@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Define diretório de trabalho
 WORKDIR /app
 
-# Instala o OmniRoute / 9Router globalmente
-RUN npm install -g omniroute || npm install -g 9router || echo "Instalação global concluída"
+# Instala o OmniRoute globalmente
+RUN npm install -g omniroute@latest
 
 # Cria diretórios para persistência e skills
 RUN mkdir -p /root/.omniroute/skills /root/.omniroute/data /app/skills-repo
