@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  omniroute:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: omniroute-gateway
+    restart: unless-stopped
+    ports:
+      - "20128:20128" # Porta padrão do OmniRoute / 9Router
+    env_file:
+      - .env # Carrega variáveis locais geradas pelo setup (como OMNIROUTE_API_KEY)
+    environment:
+      - PORT=20128
+      - NODE_OPTIONS=--max-old-space-size=4096 # Evita erro out of memory no SQLite WASM (sql.js)
+      - ENABLE_RTK=true                        # Ativa o RTK Token Saver (Compressão de terminal/git)
+      - CAVEMAN_MODE=true                      # Ativa o modo conciso para economizar tokens de resposta
+      - GITHUB_SKILLS_REPO=${OMNIROUTE_SKILLS_REPO:-https://github.com/pmacedo25/project-agents-templates.git}
+      - GITHUB_BRANCH=main
+      # Conecte suas contas diretamente pelo Dashboard Web em http://localhost:20128/dashboard
+    volumes:
+      # Persiste o banco de dados local SQLite (onde ficam salvas suas contas logadas e histórico)
+      - omniroute_data:/root/.omniroute/data
+      # Pasta onde as Skills baixadas do GitHub ficarão como um repositório Git vivo e dinâmico
+      - omniroute_skills:/root/.omniroute/skills
+      # Monta o arquivo de configuração de Combos inicial
+      - ./combos-config.json:/app/combos-config.json:ro
+
+volumes:
+  omniroute_data:
+  omniroute_skills:
