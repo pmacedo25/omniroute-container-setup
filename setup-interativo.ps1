@@ -290,48 +290,13 @@ try {
 }
 
 # ------------------------------------------------------------------------------
-# [+] ETAPA 5: Escolha, Instalação e Injeção Automática de Configuração na IDE Desktop
+# [+] ETAPA 5: Instalação e Injeção Automática do OpenHands Desktop App
 # ------------------------------------------------------------------------------
-Write-Host "`n[+] [ETAPA 5/5] Escolha, Instalação e Automação da IDE Desktop (Sem Login / 100% BYOK)..." -ForegroundColor Yellow
-Write-Host "  [1] OpenCode Desktop (IDE & Agente Nativo Windows - Instalação Instantânea & Auto-Config) [RECOMENDADO]" -ForegroundColor Green
-Write-Host "  [2] OpenHands Agent (Plataforma Agente Autônoma - Requer Docker/WSL)" -ForegroundColor Cyan
-Write-Host "  [3] Instalar e Configurar Ambas" -ForegroundColor Yellow
-Write-Host "  [4] Pular instalação de IDEs agora" -ForegroundColor DarkGray
+Write-Host "`n[+] [ETAPA 5/5] Configuração e Instalação do OpenHands Desktop App..." -ForegroundColor Yellow
+Write-Host "[INFO] O OpenHands é a nossa plataforma oficial de Agentes de IA Desktop (100% BYOK e sem login)." -ForegroundColor Green
 
-$opcaoIDE = Read-Host "`n-> Escolha sua opção de IDE (1, 2, 3 ou 4) [Padrão: 1]"
-if ([string]::IsNullOrWhiteSpace($opcaoIDE)) { $opcaoIDE = "1" }
-
-# Instalação e Injeção Automática do OpenCode
-if ($opcaoIDE -eq "1" -or $opcaoIDE -eq "3") {
-    Write-Host "`n[>] [Instalação OpenCode] Verificando ambiente..." -ForegroundColor Cyan
-    if (Get-Command "npm" -ErrorAction SilentlyContinue) {
-        Write-Host "   [>] Instalando 'opencode-ai' globalmente via npm..." -ForegroundColor Cyan
-        npm install -g opencode-ai --silent 2>$null
-        if (Get-Command "opencode" -ErrorAction SilentlyContinue) {
-            Write-Host "   [OK] OpenCode instalado com sucesso no sistema!" -ForegroundColor Green
-        }
-    } else {
-        Write-Host "   [INFO] npm não disponível. Baixe o instalador desktop do OpenCode em: https://opencode.ai" -ForegroundColor Yellow
-    }
-
-    # Injeção Automática do Arquivo de Configuração do OpenCode (~/.opencode/config.json e APPDATA)
-    $opencodeDirs = @("$homeDir\.opencode", "$env:APPDATA\opencode")
-    foreach ($dir in $opencodeDirs) {
-        if (-not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
-        $opencodeConfig = @{
-            provider = "openai-compatible"
-            baseUrl = "http://localhost:20128/v1"
-            apiKey = $appKey
-            model = "combo-coding"
-        } | ConvertTo-Json -Depth 5
-        Set-Content -Path "$dir\config.json" -Value $opencodeConfig -Encoding UTF8
-    }
-    Write-Host "  [OK] Configuração injetada automaticamente para o OpenCode Desktop & CLI!" -ForegroundColor Green
-    Write-Host "  [INFO] Digite 'opencode' no terminal ou abra o aplicativo desktop." -ForegroundColor Cyan
-}
-
-# Instalação e Injeção Automática do OpenHands
-if ($opcaoIDE -eq "2" -or $opcaoIDE -eq "3") {
+$instOpenHands = Read-Host "`n[?] Deseja instalar e configurar o OpenHands Desktop App agora? (s/n - Padrão: s)"
+if ($instOpenHands -notmatch "^[nN]") {
     Write-Host "`n[>] [Instalação OpenHands] Verificando ambiente..." -ForegroundColor Cyan
     
     $openhandsInstalled = $false
@@ -365,7 +330,7 @@ if ($opcaoIDE -eq "2" -or $opcaoIDE -eq "3") {
     [Environment]::SetEnvironmentVariable("LLM_MODEL", "combo-coding", "User")
     [Environment]::SetEnvironmentVariable("LLM_BASE_URL", "http://localhost:20128/v1", "User")
     [Environment]::SetEnvironmentVariable("LLM_API_KEY", $appKey, "User")
-    Write-Host "  [OK] Configuração injetada em ~/.openhands/agent_settings.json e variáveis do sistema!" -ForegroundColor Green
+    Write-Host "  [OK] Configuração de LLM injetada em ~/.openhands/agent_settings.json!" -ForegroundColor Green
 
     # Iniciar o servidor do OpenHands em background se a porta 3000 ainda não estiver ativa
     $is3000Up = Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue
@@ -410,10 +375,8 @@ if ($opcaoIDE -eq "2" -or $opcaoIDE -eq "3") {
     } else {
         Write-Host "  [WARN] O serviço do OpenHands está inicializando. Abra o aplicativo pelo ícone 'OpenHands Desktop' na sua Área de Trabalho!" -ForegroundColor Yellow
     }
-}
-
-if ($opcaoIDE -eq "4") {
-    Write-Host "[INFO] Instalação de IDEs pulada. Você pode instalar o OpenHands (https://openhands.dev) ou OpenCode (https://opencode.ai) quando quiser!" -ForegroundColor DarkGray
+} else {
+    Write-Host "[INFO] Instalação do OpenHands pulada. Você pode instalar quando quiser rodando o setup novamente." -ForegroundColor DarkGray
 }
 
 # ------------------------------------------------------------------------------
