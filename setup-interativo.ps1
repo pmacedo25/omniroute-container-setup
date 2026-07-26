@@ -216,26 +216,12 @@ if (-not $skipWeb) {
     }
 
     Write-Host "`n==============================================================================" -ForegroundColor White
-    Write-Host "-> PASSO 2: CONFIGURAÇÃO DOS PROVEDORES DE IA (Um a Um)" -ForegroundColor Cyan
-    Write-Host "   Agora vamos autenticar seus provedores na aba 'OAuth / Providers' do Dashboard." -ForegroundColor White
+    Write-Host "-> PASSO 2: AUTENTICAÇÃO DOS SEUS PROVEDORES DE IA" -ForegroundColor Cyan
+    Write-Host "   Abrindo o Dashboard na aba de Provedores/OAuth..." -ForegroundColor White
+    Write-Host "   No navegador, conecte as contas dos provedores que você possui (Claude, OpenAI, Copilot, etc.)." -ForegroundColor White
     Write-Host "==============================================================================" -ForegroundColor White
-
-    $providers = @(
-        @{ name = "Anthropic (Claude)"; id = "anthropic" },
-        @{ name = "OpenAI / Codex"; id = "openai" },
-        @{ name = "GitHub Copilot"; id = "github-copilot" }
-    )
-
-    foreach ($prov in $providers) {
-        $resp = Read-Host "`n[?] Deseja conectar/configurar o provedor '$($prov.name)' agora? (s/n)"
-        if ($resp -match "^[sS]") {
-            Write-Host "  [Web] Abrindo a página de configuração no navegador..." -ForegroundColor Cyan
-            Start-Process "http://localhost:20128/dashboard"
-            Read-Host "  [...] Conecte a conta do '$($prov.name)' no Dashboard e pressione [ENTER] para continuar"
-        } else {
-            Write-Host "  [INFO] Provedor '$($prov.name)' pulado." -ForegroundColor DarkGray
-        }
-    }
+    Start-Process "http://localhost:20128/dashboard"
+    Read-Host "`n[?] Após conectar seus provedores no Dashboard, pressione [ENTER] para continuar"
 }
 
 # Preserva STORAGE_ENCRYPTION_KEY ao salvar OMNIROUTE_API_KEY
@@ -371,7 +357,11 @@ if ($opcaoIDE -eq "1" -or $opcaoIDE -eq "3") {
     [Environment]::SetEnvironmentVariable("LLM_BASE_URL", "http://localhost:20128/v1", "User")
     [Environment]::SetEnvironmentVariable("LLM_API_KEY", $appKey, "User")
     Write-Host "  [OK] Configuração injetada em ~/.openhands/agent_settings.json e variáveis do sistema!" -ForegroundColor Green
-    Write-Host "  [Web] Acesse o OpenHands na porta 3000 (http://localhost:3000) ou pelo app desktop." -ForegroundColor Cyan
+    Write-Host "  [Web] Abrindo a interface do OpenHands no navegador (http://localhost:3000)..." -ForegroundColor Cyan
+    Start-Process "http://localhost:3000" -ErrorAction SilentlyContinue
+    Write-Host "  [INFO] Como executar o OpenHands no dia a dia:" -ForegroundColor Yellow
+    Write-Host "         * No terminal: Digite 'openhands serve' para iniciar o servidor web do agente." -ForegroundColor White
+    Write-Host "         * No navegador: Acesse http://localhost:3000 (ou instale a página como app no MS Edge/Chrome)." -ForegroundColor White
 }
 
 # Instalação e Injeção Automática do OpenCode
