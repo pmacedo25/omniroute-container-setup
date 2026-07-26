@@ -319,9 +319,9 @@ try {
 # [+] ETAPA 5: Escolha, Instalação e Injeção Automática de Configuração na IDE Desktop
 # ------------------------------------------------------------------------------
 Write-Host "`n[+] [ETAPA 5/5] Escolha, Instalação e Automação da IDE Desktop (Sem Login / 100% BYOK)..." -ForegroundColor Yellow
-Write-Host "  [1] OpenHands (Plataforma Agente Autônoma - Instalação & Auto-Config) [PADRÃO]" -ForegroundColor Green
-Write-Host "  [2] OpenCode (IDE / CLI Desktop 100% BYOK - Instalação via npm & Auto-Config)" -ForegroundColor Cyan
-Write-Host "  [3] Instalar e Configurar Ambas (OpenHands e OpenCode)" -ForegroundColor Yellow
+Write-Host "  [1] OpenCode Desktop (IDE & Agente Nativo Windows - Instalação Instantânea & Auto-Config) [RECOMENDADO]" -ForegroundColor Green
+Write-Host "  [2] OpenHands Agent (Plataforma Agente Autônoma - Requer Docker/WSL)" -ForegroundColor Cyan
+Write-Host "  [3] Instalar e Configurar Ambas" -ForegroundColor Yellow
 Write-Host "  [4] Pular instalação de IDEs agora" -ForegroundColor DarkGray
 
 $opcaoIDE = Read-Host "`n-> Escolha sua opção de IDE (1, 2, 3 ou 4) [Padrão: 1]"
