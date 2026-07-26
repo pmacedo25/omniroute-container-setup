@@ -128,19 +128,18 @@ if ($modo -eq "1") {
     if (Get-Command "cl.exe" -ErrorAction SilentlyContinue) { $hasCPP = $true }
     
     if (-not $hasCPP) {
-        Write-Host "[INFO] O Windows não possui o compilador C++ do Visual Studio instalado no PATH." -ForegroundColor Yellow
-        Write-Host "       Sem C++, o Node.js utiliza o 'sql.js' (driver WebAssembly em memória)." -ForegroundColor Yellow
-        Write-Host "       Instalar os C++ Build Tools habilita o 'better-sqlite3' (driver C++ nativo e rápido, sem estouro de memória WASM e com persistência total em reinstalações)." -ForegroundColor Green
+        Write-Host "[INFO] Nota sobre C++ Build Tools: O instalador do Visual Studio (C++) requer elevação de Administrador (UAC) no Windows." -ForegroundColor DarkGray
+        Write-Host "       Para manter a instalação 100% a nível de usuário (Sem pedir permissão de Admin), mantenha a opção padrão [n]." -ForegroundColor Green
         
-        $instCPP = Read-Host "[?] Deseja instalar os C++ Build Tools do Windows via winget agora? (s/n - Padrão: n)"
+        $instCPP = Read-Host "[?] Deseja instalar os C++ Build Tools do Windows (requer permissão de Admin)? (s/n - Padrão: n)"
         if ($instCPP -match "^[sS]") {
             if (Get-Command "winget" -ErrorAction SilentlyContinue) {
-                Write-Host "   [>] Baixando e instalando Visual Studio C++ Build Tools via winget (pode levar alguns minutos)..." -ForegroundColor Cyan
+                Write-Host "   [>] Baixando e instalando Visual Studio C++ Build Tools via winget..." -ForegroundColor Cyan
                 winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" 2>&1 | Out-Null
                 Write-Host "   [OK] C++ Build Tools instalado com sucesso!" -ForegroundColor Green
                 $hasCPP = $true
             } else {
-                Write-Host "   [WARN] Utilitário winget não encontrado. Mantendo instalação padrão." -ForegroundColor Yellow
+                Write-Host "   [WARN] Utilitário winget não encontrado. Mantendo instalação padrão no nível de usuário." -ForegroundColor Yellow
             }
         }
     }
