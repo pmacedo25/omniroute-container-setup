@@ -1,4 +1,4 @@
-param([ValidateSet("status", "dashboard", "logs", "restart", "pull", "doctor")][string]$Action = "status")
+param([ValidateSet("status", "dashboard", "ide", "logs", "restart", "pull", "doctor")][string]$Action = "status")
 
 $stateDirectory = Join-Path $env:USERPROFILE ".omniroute"
 $mode = if (Test-Path (Join-Path $stateDirectory "mode.container")) { "container" } else { "local" }
@@ -11,6 +11,13 @@ switch ($Action) {
         } catch { Write-Error "OmniRoute indisponível: $($_.Exception.Message)" }
     }
     "dashboard" { Start-Process "http://localhost:20128/dashboard" }
+    "ide" {
+        $launcher = Join-Path $env:USERPROFILE ".openrouterai\OpenRouterAI.ps1"
+        if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
+            throw "OpenRouterAI não está instalado. Reexecute o setup sem -SkipOpenRouterAI."
+        }
+        & $launcher
+    }
     "logs" {
         if ($mode -eq "container") { & $engine logs --tail 100 -f omniroute }
         else { Get-ScheduledTaskInfo -TaskName "OmniRoute Gateway" }
@@ -26,5 +33,12 @@ switch ($Action) {
     "doctor" {
         if ($mode -eq "container") { & $engine exec omniroute node healthcheck.mjs }
         else { & omniroute doctor --json }
+        $current = Join-Path $env:USERPROFILE ".openrouterai\current.json"
+        if (Test-Path -LiteralPath $current -PathType Leaf) {
+            $ide = Get-Content -LiteralPath $current -Raw | ConvertFrom-Json
+            Write-Host "OpenRouterAI $($ide.version): $($ide.executable)"
+        } else {
+            Write-Warning "OpenRouterAI ainda não foi instalado."
+        }
     }
 }

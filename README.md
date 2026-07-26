@@ -127,6 +127,7 @@ Depois de abrir um novo PowerShell:
 ```powershell
 omni.ps1 status
 omni.ps1 dashboard
+omni.ps1 ide
 omni.ps1 logs
 omni.ps1 restart
 omni.ps1 pull

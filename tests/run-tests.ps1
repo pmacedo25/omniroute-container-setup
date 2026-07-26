@@ -126,6 +126,9 @@ try {
     Assert-True ($moduleSource -match 'Set-TokenEfficiencyDefaults') "Setup deve aplicar otimizações de tokens"
     Assert-True ($moduleSource -match 'Install-OpenRouterAI') "Setup deve instalar OpenRouterAI nos dois modos"
     Assert-True ($setupSource -match 'OpenRouterAIArtifactPath') "Setup deve aceitar artefato local para validação"
+    $omniSource = Get-Content (Join-Path $projectDirectory "scripts\omni.ps1") -Raw
+    Assert-True ($omniSource -match '"ide"') "Comando omni deve abrir a IDE"
+    Assert-True ($omniSource -match '\.openrouterai\\current\.json') "Doctor deve diagnosticar a IDE"
     Assert-True ($moduleSource -match 'defaultMode = "stacked"') "RTK e Caveman devem vir habilitados em pipeline"
     Assert-True ($moduleSource -match 'session-dedup.+enabled = \$true') "Deduplicação de sessão deve vir habilitada"
     Assert-True ($moduleSource -match 'A alteração vale para novas conversas') "Setup deve explicar como trocar de combo"
