@@ -14,6 +14,7 @@ $setupDir = $PSScriptRoot
 $homeDir = $env:USERPROFILE
 $skillsDir = "$homeDir\.omniroute\skills"
 $logFile = "$homeDir\.omniroute\gateway.log"
+$modeFile = "$homeDir\.omniroute\mode.env"
 
 # Garante que o diretório base existe
 if (-not (Test-Path "$homeDir\.omniroute")) { New-Item -Path "$homeDir\.omniroute" -ItemType Directory -Force | Out-Null }
@@ -27,6 +28,12 @@ Write-Host "  [1] [Docker/Podman] Container Isolado - Sem alterar o sistema" -Fo
 Write-Host "  [2] [Local] Nativo no Windows (Node.js/NPM) - Sem precisar de Docker" -ForegroundColor Green
 $modo = Read-Host "`n-> Digite 1 ou 2 (Padrão: 2)"
 if ($modo -ne "1") { $modo = "2" }
+
+if ($modo -eq "1") {
+    "OMNIROUTE_MODE=container" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
+} else {
+    "OMNIROUTE_MODE=local" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
+}
 
 # ------------------------------------------------------------------------------
 # [+] ETAPA 2: Configuração do Repositório de Skills
@@ -53,20 +60,10 @@ if (Test-Path "$skillsDir\.git") {
 }
 Write-Host "[OK] Skills operacionais em ~/.omniroute/skills vinculadas a: $repoUrl" -ForegroundColor Green
 
-if ($modo -eq "2") {
-    $autoUpdate = Read-Host "`n-> Deseja criar uma Tarefa Agendada no Windows para atualizar as Skills (git pull) a cada 6 horas? (s/n - Padrão: s)"
-    if ($autoUpdate -imatch "^[sS]?$") {
-        try {
-            $taskName = "OmniRoute-Skills-AutoUpdate"
-            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-            $action = New-ScheduledTaskAction -Execute "git.exe" -Argument "-C `"$skillsDir`" pull --quiet"
-            $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration (New-TimeSpan -Days 3650)
-            Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Description "Atualização automática das Skills do OmniRoute no GitHub" | Out-Null
-            Write-Host "[OK] Tarefa agendada '$taskName' criada com sucesso (Atualização a cada 6 horas)!" -ForegroundColor Green
-        } catch {
-            Write-Host "[WARN] Não foi possível registrar a tarefa agendada automática. Você pode atualizar manualmente via terminal." -ForegroundColor Yellow
-        }
-    }
+if ($modo -eq "1") {
+    Write-Host "[INFO] No modo Container, um agendador interno executará 'git pull' automaticamente de hora em hora." -ForegroundColor DarkGray
+} else {
+    Write-Host "[INFO] No modo Nativo Windows, atualize suas Skills quando desejar rodando o comando 'omni pull'." -ForegroundColor DarkGray
 }
 
 # ------------------------------------------------------------------------------
@@ -81,6 +78,7 @@ if ($modo -eq "1") {
             Write-Host "[ERROR] Nem Docker nem Podman foram encontrados no PATH!" -ForegroundColor Red
             Write-Host "[WARN] Alternando automaticamente para o Modo Nativo (2)..." -ForegroundColor Yellow
             $modo = "2"
+            "OMNIROUTE_MODE=local" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
         }
     }
 }
@@ -316,57 +314,97 @@ if (-not (Test-Path $profilePath)) {
 
 $omniFunction = @"
 
-# --- Atalho OmniRoute Gateway (Gerenciamento 2026 com APPKEY & Custom Skills) ---
+# --- Atalho OmniRoute Gateway (Gerenciamento 2026 com Suporte Nativo a Container e Local) ---
 function omni {
     param([string]`$Action = "status", [string]`$Arg1 = "")
     `$setupDir = "$setupDir"
     `$logFile = "`$env:USERPROFILE\.omniroute\gateway.log"
     `$skillsDir = "`$env:USERPROFILE\.omniroute\skills"
+    `$modeFile = "`$env:USERPROFILE\.omniroute\mode.env"
     `$env:PATH += ";`$env:APPDATA\npm;C:\Program Files\nodejs;C:\Program Files (x86)\nodejs"
     `$env:OMNIROUTE_API_KEY = "$appKey"
     
+    `$mode = "local"
+    if (Test-Path `$modeFile) {
+        `$line = Get-Content `$modeFile -ErrorAction SilentlyContinue | Where-Object { `$_ -match "^OMNIROUTE_MODE=" }
+        if (`$line -match "container") { `$mode = "container" }
+    }
+    
+    `$engine = "docker"
+    if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
+        if (Get-Command "podman" -ErrorAction SilentlyContinue) { `$engine = "podman" }
+    }
+    
     switch (`$Action.ToLower()) {
         "status" {
-            Write-Host "[Local] Status do Gateway:" -ForegroundColor Cyan
+            Write-Host "[`$(`$mode.ToUpper())] Status do Gateway:" -ForegroundColor Cyan
             `$conn = Test-NetConnection -ComputerName localhost -Port 20128 -InformationLevel Quiet -ErrorAction SilentlyContinue
-            if (`$conn) { Write-Host "[OK] Gateway RODANDO invisível na porta 20128!" -ForegroundColor Green }
-            else { Write-Host "[ERROR] Gateway PARADO. Digite 'omni restart' para iniciar." -ForegroundColor Red }
+            if (`$conn) { 
+                if (`$mode -eq "container") { Write-Host "[OK] Container OmniRoute Gateway online e respondendo na porta 20128!" -ForegroundColor Green }
+                else { Write-Host "[OK] Gateway Nativo RODANDO invisível na porta 20128!" -ForegroundColor Green }
+            } else { Write-Host "[ERROR] Gateway PARADO na porta 20128. Digite 'omni restart' para iniciar." -ForegroundColor Red }
         }
         "dash" { 
             Write-Host "[Web] Abrindo Dashboard..." -ForegroundColor Green
             Start-Process "http://localhost:20128/dashboard" 
         }
         "logs" {
-            if (Test-Path `$logFile) { Get-Content `$logFile -Tail 50 -Wait }
-            else { Write-Host "[INFO] Arquivo de log ainda não criado em: `$logFile" -ForegroundColor Yellow }
+            if (`$mode -eq "container") {
+                Write-Host "[Docker/Podman] Exibindo logs em tempo real do container 'omniroute-gateway'..." -ForegroundColor Cyan
+                Invoke-Expression "`$engine logs -f omniroute-gateway"
+            } else {
+                if (Test-Path `$logFile) { Get-Content `$logFile -Tail 50 -Wait }
+                else { Write-Host "[INFO] Arquivo de log ainda não criado em: `$logFile" -ForegroundColor Yellow }
+            }
         }
         "restart" {
-            Write-Host "[>] Reiniciando Gateway em background invisível..." -ForegroundColor Yellow
-            Get-Process node, npx, cmd -ErrorAction SilentlyContinue | Where-Object { `$_.CommandLine -match "20128" -or `$_.MainWindowTitle -match "omniroute" } | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 2
-            
-            `$cmd = "set NODE_OPTIONS=--max-old-space-size=4096&& set PORT=20128&& set ENABLE_RTK=true&& set CAVEMAN_MODE=true&& omniroute serve --port 20128 --no-open > ""`$logFile"" 2>&1"
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", `$cmd -WindowStyle Hidden
-            Write-Host "[OK] Gateway reiniciado em background sem janelas pop-up!" -ForegroundColor Green
+            if (`$mode -eq "container") {
+                Write-Host "[Docker/Podman] Reiniciando container 'omniroute-gateway'..." -ForegroundColor Yellow
+                Push-Location `$setupDir
+                Invoke-Expression "`$engine compose restart"
+                Pop-Location
+                Write-Host "[OK] Container reiniciado com sucesso!" -ForegroundColor Green
+            } else {
+                Write-Host "[Local] Reiniciando Gateway em background invisível..." -ForegroundColor Yellow
+                Get-Process node, npx, cmd -ErrorAction SilentlyContinue | Where-Object { `$_.CommandLine -match "20128" -or `$_.MainWindowTitle -match "omniroute" } | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+                
+                `$cmd = "set NODE_OPTIONS=--max-old-space-size=4096&& set PORT=20128&& set ENABLE_RTK=true&& set CAVEMAN_MODE=true&& omniroute serve --port 20128 --no-open > ""`$logFile"" 2>&1"
+                Start-Process -FilePath "cmd.exe" -ArgumentList "/c", `$cmd -WindowStyle Hidden
+                Write-Host "[OK] Gateway nativo reiniciado em background sem janelas pop-up!" -ForegroundColor Green
+            }
         }
         "pull" {
-            Write-Host "[>] Sincronizando e atualizando Skills em: `$skillsDir..." -ForegroundColor Cyan
+            Write-Host "[>] Sincronizando e atualizando Skills..." -ForegroundColor Cyan
             if (Test-Path "`$skillsDir\.git") {
                 Push-Location `$skillsDir
                 git pull origin main --quiet
                 Pop-Location
-                Write-Host "[OK] Repositório de Skills atualizado via git pull com sucesso!" -ForegroundColor Green
+                Write-Host "[OK] Volume local de Skills (`$skillsDir) atualizado via git pull!" -ForegroundColor Green
             } else {
-                Write-Host "[WARN] O diretório de skills em `$skillsDir não é um repositório git ativo. Rode o instalador para configurar." -ForegroundColor Yellow
+                Write-Host "[WARN] Diretório local `$skillsDir não é um repositório git ativo." -ForegroundColor Yellow
+            }
+            if (`$mode -eq "container") {
+                Write-Host "[Docker/Podman] Executando git pull diretamente dentro do container..." -ForegroundColor Cyan
+                Invoke-Expression "`$engine exec omniroute-gateway git -C /root/.omniroute/skills pull origin main --quiet" 2>`$null
+                Write-Host "[OK] Container sincronizado com o GitHub!" -ForegroundColor Green
             }
         }
         "reset-db" {
             Write-Host "[>] Resetando banco de dados SQLite corrompido..." -ForegroundColor Yellow
-            Get-Process node, npx, cmd -ErrorAction SilentlyContinue | Where-Object { `$_.CommandLine -match "20128" -or `$_.MainWindowTitle -match "omniroute" } | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
-            Remove-Item "`$env:USERPROFILE\.omniroute\storage.sqlite*" -Force -ErrorAction SilentlyContinue
-            Write-Host "[OK] Banco SQLite resetado com sucesso! Reiniciando Gateway..." -ForegroundColor Green
-            omni restart
+            if (`$mode -eq "container") {
+                Invoke-Expression "`$engine stop omniroute-gateway" 2>`$null
+                Remove-Item "`$env:USERPROFILE\.omniroute\data\*.sqlite*" -Force -ErrorAction SilentlyContinue
+                Remove-Item "`$env:USERPROFILE\.omniroute\storage.sqlite*" -Force -ErrorAction SilentlyContinue
+                Invoke-Expression "`$engine start omniroute-gateway" 2>`$null
+                Write-Host "[OK] Banco SQLite resetado no volume do container e serviço reiniciado!" -ForegroundColor Green
+            } else {
+                Get-Process node, npx, cmd -ErrorAction SilentlyContinue | Where-Object { `$_.CommandLine -match "20128" -or `$_.MainWindowTitle -match "omniroute" } | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 1
+                Remove-Item "`$env:USERPROFILE\.omniroute\storage.sqlite*" -Force -ErrorAction SilentlyContinue
+                Write-Host "[OK] Banco SQLite resetado com sucesso! Reiniciando Gateway nativo..." -ForegroundColor Green
+                omni restart
+            }
         }
         default { Write-Host "Comandos: omni [status | dash | logs | restart | pull | reset-db]" -ForegroundColor Yellow }
     }
@@ -381,7 +419,7 @@ if ($profileContent -match "function omni \{") {
     Add-Content -Path $profilePath -Value "`n$omniFunction" -Encoding UTF8
 }
 
-Write-Host "[OK] Comando de terminal 'omni' registrado e configurado no PowerShell com a APPKEY!" -ForegroundColor Green
+Write-Host "[OK] Comando de terminal 'omni' registrado e configurado no PowerShell (Suporte Híbrido Container/Local)!" -ForegroundColor Green
 
 Write-Host "`n==============================================================================" -ForegroundColor Cyan
 Write-Host "=== SETUP CONCLUÍDO COM SUCESSO! AMBIENTE IA PRONTO PARA USO ===" -ForegroundColor Green
