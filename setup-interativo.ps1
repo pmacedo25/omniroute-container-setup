@@ -382,7 +382,7 @@ if ($modo -eq "1") {
     & $engine rm -f openhands-app 2>$null
 
     Write-Host "  [>] Subindo contêiner 'openhands-app' na porta 3000 via $engine..." -ForegroundColor Cyan
-    & $engine run -d -t --name openhands-app -p 3000:3000 -e LLM_MODEL=combo-coding -e LLM_BASE_URL=http://host.containers.internal:20128/v1 -e LLM_API_KEY=$appKey ghcr.io/openhands/agent-server:latest
+    & $engine run -d -t --name openhands-app -p 3000:3000 -e LLM_MODEL=combo-coding -e LLM_BASE_URL=http://host.containers.internal:20128/v1 -e LLM_API_KEY=$appKey docker.openhands.dev/openhands/openhands:latest
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [ERROR] Falha ao criar o contêiner 'openhands-app' via $engine!" -ForegroundColor Red
@@ -406,7 +406,7 @@ set "PATH=%PATH%;$env:LOCALAPPDATA\Programs\Podman;C:\Program Files\RedHat\Podma
 powershell -NoProfile -Command "Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet" | findstr /i "True" >nul 2>&1
 if errorlevel 1 (
     echo [OpenHands Desktop App] Garantindo contêiner do agente rodando na porta 3000 via $engine...
-    $engine start openhands-app 2>nul || $engine run -d -t --name openhands-app -p 3000:3000 -e LLM_MODEL=combo-coding -e LLM_BASE_URL=http://localhost:20128/v1 -e LLM_API_KEY=$appKey ghcr.io/openhands/agent-server:latest 2>nul
+    $engine start openhands-app 2>nul || $engine run -d -t --name openhands-app -p 3000:3000 -e LLM_MODEL=combo-coding -e LLM_BASE_URL=http://localhost:20128/v1 -e LLM_API_KEY=$appKey docker.openhands.dev/openhands/openhands:latest 2>nul
     powershell -NoProfile -Command "for (`$i=0; `$i -lt 15; `$i++) { if (Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet) { exit 0 }; Start-Sleep -Seconds 1 }; exit 1"
 )
 
