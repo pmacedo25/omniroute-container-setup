@@ -1,85 +1,60 @@
-# 🚀 Setup Interativo: OmniRoute Gateway + Contas de IDE + GitHub Skills (`Universal IDEs`)
-# Edição 2026 - Suporte a APPKEY, Default Combos Padrão, Custom Skills URL e Zero Popups
+# [Setup Interativo] OmniRoute Gateway + Contas OAuth + IDEs Focadas em IA
+# Edição 2026 - Suporte a APPKEY, Combos Padrão, Custom Skills e Roteamento Limpo
 
-Bem-vindo à arquitetura definitiva de roteamento local de LLMs e otimização de tokens (Edição 2026). Este projeto foi salvo no seu Workspace em `C:\Users\sport\workspace\omniroute-container-setup` e foi desenhado para **eliminar loops de janelas CMD**, gerenciar consumo de memória, sincronizar Skills continuamente do GitHub, automatizar seus **Combos Padrão (`Default Combos`)** com uma **APPKEY** unificada e configurar **todas as suas IDEs, Apps Desktop e CLIs automaticamente na raiz**!
-
----
-
-## 🌟 O Que Há de Novo nesta Versão?
-
-1. **💻 Cobertura Total de IDEs e CLIs (Automação na Raiz):** Seja rodando em Container ou Nativo, o instalador localiza e reescreve as configurações de proxy e chave para 100% das suas ferramentas de desenvolvimento:
-   * **Antigravity 2.0 (App Desktop), Antigravity IDE (VS Code-based) e Antigravity CLI (`agy`)**: Configura `GEMINI_BASE_URL` / `GOOGLE_GENAI_BASE_URL` e edita o `settings.json` em `%APPDATA%\Antigravity IDE\User`.
-   * **Claude Code App (Windows Desktop) e Claude CLI (`claude`)**: Configura `ANTHROPIC_BASE_URL`, chave e modelo default com notificação de broadcast para o Windows Explorer.
-   * **Codex CLI (`codex`) e OpenAI Desktop App**: Cria/atualiza direto no arquivo `%USERPROFILE%\.codex\config.toml`.
-   * **VS Code & GitHub Copilot**: Injeta o bloco `github.copilot.advanced` no `%APPDATA%\Code\User\settings.json`.
-2. **🌐 Repositório de Skills Customizável e Sincronização Contínua:** No momento do setup, você informa a URL do seu repositório do GitHub (ou usa o padrão `pmacedo25/project-agents-templates`). O instalador clona o repositório Git diretamente em `~/.omniroute/skills`, permitindo atualizações dinâmicas por `omni pull` ou pelo agendador em segundo plano.
-3. **⏰ Atualização Automática de Skills:** No Windows Nativo, o assistente oferece criar uma Tarefa Agendada invisível do Windows (Task Scheduler) que faz um `git pull` silencioso a cada 6 horas. No modo Container, um loop interno no Docker faz o mesmo.
-4. **🔑 Automação com APPKEY Unificada:** O assistente orienta você a gerar sua APPKEY de segurança no Dashboard e a salva nas variáveis do sistema (`OMNIROUTE_API_KEY`). Todas as suas IDEs já ficam autenticadas automaticamente!
-5. **🎯 Cadastro Automático de Default Combos via API:** Com a APPKEY em mãos, o instalador cadastra via REST API os 3 combos padrão do ecossistema (`combo-coding`, `combo-refining`, `combo-testing`) e define o `combo-coding` como o **Fallback Global (Default Combo)**.
-6. **🚫 Zero Pop-ups e Sem Loops de CMD:** Injeção de `NODE_OPTIONS=--max-old-space-size=4096` (evitando erro *out of memory* no driver SQLite) e execução silenciosa em background sem a flag `--daemon`.
-7. **🧹 Atalho de Recuperação Rápida (`omni reset-db`):** Se em algum teste ou pico de luz o arquivo SQLite for corrompido, basta rodar `omni reset-db` para limpar a trava e reiniciar o serviço limpo em 2 segundos.
+Bem-vindo à arquitetura definitiva de roteamento local de LLMs e otimização de tokens. Este projeto foi desenhado para gerenciar o consumo de memória, eliminar janelas pop-up de CMD, sincronizar Skills continuamente de qualquer repositório GitHub e configurar um ambiente de trabalho focado em IA (Roo Code / Cline e Cursor) que consome nativamente os seus Combos Padrão.
 
 ---
 
-## 🚀 Como Executar o Instalador Interativo
+## [INFO] O Que Há de Novo e Melhorado?
 
-Abra o seu **PowerShell** e rode o script na pasta do workspace:
+1. **[Arquitetura Limpa e Não-Intrusiva] Preservação das IDEs Oficiais:**
+   * Ferramentas oficiais como o **VS Code GitHub Copilot**, **Claude Code App / CLI**, **Codex / ChatGPT Desktop App** e **Antigravity 2.0 / IDE** são mantidas **100% intactas e sem modificações em seus arquivos locais ou variáveis globais do Windows**.
+   * Isso garante que os aplicativos nativos continuem funcionando diretamente na nuvem dos seus fabricantes sem erros de UAC, conflitos de HMAC ou travamentos.
+2. **[IDEs Focadas em IA] Menu Suspenso Dinâmico com Combos:**
+   * Para utilizar todo o poder dos Combos e fallback do OmniRoute, direcionamos o fluxo para ambientes especializados que leem nativamente o endpoint `/v1/models` e exibem os seus Combos diretamente no menu suspenso (dropdown) de modelos do chat:
+   * **Roo Code (Antigo Cline) no VS Code:** Extensão autônoma líder de mercado que consome a API "OpenAI Compatible" do Gateway na porta 20128.
+   * **Cursor IDE:** Editor autônomo baseado no VS Code que suporta Override Base URL nativamente.
+3. **[Setup Interativo de Provedores] Configuração Passo a Passo:**
+   * Antes de cadastrar os Combos, o instalador orienta a geração da APPKEY de segurança e faz um loop interativo oferecendo conectar os provedores OAuth (Anthropic, OpenAI, GitHub Copilot) um a um abrindo o painel diretamente no navegador.
+4. **[Schema de Modelos Corrigido] Combos Padrão Ativos via API:**
+   * O assistente cadastra via REST API os 3 combos padrão usando o schema correto de array de strings (`models: ["provider/model"]`):
+     * `combo-coding` (Priority): `anthropic/claude-3-7-sonnet-latest` -> `openai/gpt-4o` -> `github-copilot/claude-3.7-sonnet`
+     * `combo-refining` (Priority): `anthropic/claude-3-7-sonnet-latest` -> `openai/o3-mini` -> `github-copilot/gpt-4o`
+     * `combo-testing` (Round-Robin): `openai/gpt-4o-mini` -> `anthropic/claude-3-5-haiku-20241022` -> `github-copilot/gpt-4o-mini`
+   * Define o `combo-coding` como o roteamento padrão (Default Combo / Global Fallback).
+5. **[Sincronização Contínua de Skills] Repositório Customizável:**
+   * Você informa a URL do seu repositório Git de prompts e skills no setup (ou usa o padrão `pmacedo25/project-agents-templates`).
+   * O sistema clona o repositório em `~/.omniroute/skills` e permite agendar uma tarefa silenciosa no Windows para atualizar as skills a cada 6 horas (`git pull`).
+6. **[Zero Pop-ups e Sem Loops] Execução Estável em Background:**
+   * Injeção de `NODE_OPTIONS=--max-old-space-size=4096` (evitando erro *out of memory* no SQLite) e execução invisível sem janelas CMD abertas.
+
+---
+
+## [>] Como Executar o Instalador Interativo
+
+Abra o seu terminal **PowerShell** e execute:
 
 ```powershell
 cd C:\Users\sport\workspace\omniroute-container-setup
 .\setup-interativo.ps1
 ```
 
-### O que o Assistente faz em 5 Etapas:
-1. **Escolha do Modo:** Você escolhe se quer rodar em Container (Docker/Podman) ou Nativo Windows.
-2. **Configuração de Skills do GitHub:** Você digita a URL do seu repositório de agentes/prompts (ou dá Enter para o padrão) e escolhe se deseja ativar a sincronização automática a cada 6 horas. O servidor liga de forma silenciosa e estável.
-3. **Autenticação OAuth e APPKEY:** Abre o Dashboard (`http://localhost:20128/dashboard`). Você loga com suas contas (Claude Pro, ChatGPT, Copilot) na aba *OAuth*, clica em *API Keys* para gerar sua APPKEY, e a cola no terminal.
-4. **Automação de Combos Padrão:** O script se conecta via API REST usando a APPKEY e cadastra os combos e regras de fallback para você.
-5. **Automação Universal de IDEs & Atalho:** Injeta proxy e chave na raiz do **Antigravity 2.0 / IDE / CLI**, **Claude Code App / CLI**, **Codex CLI / App**, e **VS Code Copilot**, disparando o broadcast do Windows (`WM_SETTINGCHANGE`) e instalando o atalho `omni`.
+### O Fluxo Completo em 5 Etapas:
+1. **[ETAPA 1] Escolha do Modo:** Selecione entre Container Isolado (Docker / Podman) ou Nativo Windows (Node.js/NPM).
+2. **[ETAPA 2] Repositório de Skills:** Informe a URL do Git de Skills e opte por ativar a sincronização automática no Windows Task Scheduler. O servidor é iniciado silenciosamente na porta 20128.
+3. **[ETAPA 3] Autenticação OAuth & APPKEY:** O navegador abre no Dashboard. Você gera e cola sua APPKEY, e o script oferece conectar cada provedor OAuth (Claude, OpenAI, Copilot) interativamente.
+4. **[ETAPA 4] Cadastro de Combos Padrão:** O instalador cadastra e atualiza os 3 combos no servidor com os modelos na ordem correta de prioridade.
+5. **[ETAPA 5] Configuração de IDEs IA (Roo Code / Cursor):** O script oferece instalar a extensão **Roo Code** no seu VS Code via terminal (`code --install-extension`) e/ou instalar o editor **Cursor IDE** localmente via `winget`, exibindo as instruções limpas de conexão. O comando global `omni` é adicionado ao seu PowerShell.
 
 ---
 
-## ⚡ Guia Rápido do Comando `omni`
+## [INFO] Guia Rápido do Comando 'omni'
 
-Após rodar o setup, você pode controlar o Gateway em qualquer terminal PowerShell do Windows:
+Após rodar o setup, você pode controlar e monitorar o Gateway em qualquer terminal PowerShell do Windows:
 
-* `omni status` $\rightarrow$ Verifica se o servidor está online de forma silenciosa e instantânea.
-* `omni dash` $\rightarrow$ Abre o painel visual no seu navegador.
-* `omni logs` $\rightarrow$ Exibe os logs em tempo real sem travar a tela.
-* `omni restart` $\rightarrow$ Reinicia o serviço em background silencioso (com aumento de memória e zero janelas abertas).
-* `omni pull` $\rightarrow$ Força a atualização imediata (`git pull`) das suas Skills no repositório `~/.omniroute/skills`.
-* `omni reset-db` $\rightarrow$ Destrava e limpa o banco SQLite caso corrompa, reiniciando o serviço limpo.
-* `omni model <combo>` $\rightarrow$ Altera o combo padrão do Claude Code em tempo real (ex: `omni model combo-refining`).
-
----
-
-## 💻 Resumo das Configurações Injetadas pelo Setup
-
-### 1. Antigravity IDE (`%APPDATA%\Antigravity IDE\User\settings.json`) e VS Code Copilot (`%APPDATA%\Code\User\settings.json`):
-```json
-{
-  "github.copilot.advanced": {
-    "debug.overrideProxyUrl": "http://localhost:20128/v1",
-    "debug.overrideApiKey": "sk-omni-sua-appkey-aqui"
-  }
-}
-```
-
-### 2. Codex CLI (`%USERPROFILE%\.codex\config.toml`):
-```toml
-[model_providers.openai]
-name = "openai"
-base_url = "http://localhost:20128/v1"
-api_key = "sk-omni-sua-appkey-aqui"
-```
-
-### 3. Antigravity 2.0 / CLI (`agy`) e Claude Code App / CLI (Variáveis + Broadcast):
-```powershell
-GEMINI_BASE_URL="http://localhost:20128/v1"
-GOOGLE_GENAI_BASE_URL="http://localhost:20128/v1"
-ANTHROPIC_BASE_URL="http://localhost:20128/v1"
-OPENAI_BASE_URL="http://localhost:20128/v1"
-OMNIROUTE_API_KEY="sk-omni-sua-appkey-aqui"
-```
-
-Tudo pronto para programar com economia de tokens, gestão de contexto, atualização contínua de skills e failover automático em todo o seu ecossistema IA!
+* `omni status` : Verifica se o servidor está online invisível na porta 20128.
+* `omni dash`   : Abre o painel Web de gerenciamento (http://localhost:20128/dashboard).
+* `omni logs`   : Acompanha os logs de requisições em tempo real.
+* `omni restart`: Reinicia o Gateway em background silencioso sem abrir janelas.
+* `omni pull`   : Sincroniza e atualiza imediatamente suas Skills do GitHub (`~/.omniroute/skills`).
+* `omni reset-db`: Reseta o banco SQLite caso corrompido e reinicia o serviço limpo.
