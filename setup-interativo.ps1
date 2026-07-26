@@ -319,61 +319,43 @@ try {
 }
 
 # ------------------------------------------------------------------------------
-# [+] ETAPA 5: Configuração de IDEs Focadas em IA (Roo Code / Cline & Cursor)
+# [+] ETAPA 5: Configuração de IDEs Desktop Autônomas e Sem Login (OpenCode & OpenHands)
 # ------------------------------------------------------------------------------
-Write-Host "`n[+] [ETAPA 5/5] Configuração do Ambiente de Trabalho IA (IDEs Focadas no OmniRoute)..." -ForegroundColor Yellow
-Write-Host "[INFO] Nota importante: Mantemos as IDEs oficiais (VS Code Copilot, Claude Code, Codex App, Antigravity) intactas" -ForegroundColor DarkGray
-Write-Host "       e sem modificações intrusivas, permitindo que você use os modelos diretos na nuvem quando quiser!" -ForegroundColor DarkGray
-Write-Host "       Para utilizar todo o poder dos Combos do OmniRoute, recomendamos um ambiente focado em IA:" -ForegroundColor Green
+Write-Host "`n[+] [ETAPA 5/5] Configuração do Ambiente Desktop de IA (Sem Login / 100% BYOK)..." -ForegroundColor Yellow
+Write-Host "[INFO] Removemos qualquer dependência do Cursor (que exige login proprietário) e extensões do VS Code." -ForegroundColor DarkGray
+Write-Host "       Abaixo estão as 2 IDEs Desktop abertas e prontas para rodar com o OmniRoute:" -ForegroundColor Green
 
-# 1. Roo Code / Cline no VS Code
-Write-Host "`n-> [Opção 1] Extensão Roo Code (Antigo Cline) para VS Code" -ForegroundColor Cyan
-Write-Host "   Extensão autônoma que consome a API 'OpenAI Compatible' e exibe os Combos no menu suspenso!" -ForegroundColor White
-
-$instRoo = Read-Host "[?] Deseja instalar a extensão Roo Code no VS Code agora? (s/n)"
-if ($instRoo -match "^[sS]") {
-    if (Get-Command "code" -ErrorAction SilentlyContinue) {
-        Write-Host "   [>] Instalando extensão rooveterinaryinc.roo-cline no VS Code..." -ForegroundColor Cyan
-        code --install-extension rooveterinaryinc.roo-cline --force 2>&1 | Out-Null
-        Write-Host "   [OK] Extensão Roo Code instalada com sucesso!" -ForegroundColor Green
-    } else {
-        Write-Host "   [WARN] Comando 'code' não encontrado no PATH. Instale o Roo Code manualmente no marketplace do VS Code." -ForegroundColor Yellow
-    }
-}
+# 1. OpenCode Desktop App
+Write-Host "`n-> [Opção 1] OpenCode Desktop (IDE & Agente Autônomo Open-Source)" -ForegroundColor Cyan
+Write-Host "   Aplicação desktop nativa 100% BYOK (Bring Your Own Key) sem necessidade de login!" -ForegroundColor White
 
 Write-Host "`n==============================================================================" -ForegroundColor White
-Write-Host "-> INSTRUÇÕES PARA ATIVAR NO ROO CODE / CLINE (VS Code):" -ForegroundColor Cyan
-Write-Host "  1. Abra as configurações da extensão Roo Code na barra lateral do VS Code." -ForegroundColor White
-Write-Host "  2. Em API Provider, selecione: OpenAI Compatible" -ForegroundColor White
-Write-Host "  3. Base URL: http://localhost:20128/v1" -ForegroundColor White
-Write-Host "  4. API Key: $appKey" -ForegroundColor White
-Write-Host "  5. No menu suspenso de modelos no topo do chat, selecione o seu Combo (ex: combo-coding)!" -ForegroundColor White
+Write-Host "-> INSTRUÇÕES PARA ATIVAR NO OPENCODE DESKTOP:" -ForegroundColor Cyan
+Write-Host "  1. Baixe e abra o OpenCode Desktop (https://opencode.ai)." -ForegroundColor White
+Write-Host "  2. Acesse Settings -> Model / Provider Settings." -ForegroundColor White
+Write-Host "  3. Selecione o provedor: OpenAI Compatible" -ForegroundColor White
+Write-Host "  4. Base URL: http://localhost:20128/v1" -ForegroundColor White
+Write-Host "  5. API Key: $appKey" -ForegroundColor White
+Write-Host "  6. Selecione seu Combo no menu suspenso (ex: combo-coding)!" -ForegroundColor White
 Write-Host "==============================================================================" -ForegroundColor White
-Read-Host "[?] Concluiu ou anotou as instruções do Roo Code? Pressione [ENTER] para continuar"
+Read-Host "[?] Anotou ou concluiu a configuração do OpenCode? Pressione [ENTER] para continuar"
 
-# 2. Instalação Opcional do Cursor IDE
-Write-Host "`n-> [Opção 2] Editor Cursor (IDE Autônoma Focada em IA)" -ForegroundColor Cyan
-Write-Host "   Editor líder de mercado baseado no VS Code com suporte nativo a Override Base URL." -ForegroundColor White
-
-$instCursor = Read-Host "[?] Deseja instalar o editor Cursor no seu computador via winget agora? (s/n)"
-if ($instCursor -match "^[sS]") {
-    if (Get-Command "winget" -ErrorAction SilentlyContinue) {
-        Write-Host "   [>] Baixando e instalando Cursor via winget (pode levar alguns minutos)..." -ForegroundColor Cyan
-        winget install -e --id Anysphere.Cursor --silent 2>&1 | Out-Null
-        Write-Host "   [OK] Cursor IDE instalado com sucesso!" -ForegroundColor Green
-    } else {
-        Write-Host "   [WARN] Utilitário winget não encontrado. Baixe o Cursor em: https://cursor.com" -ForegroundColor Yellow
-    }
-}
+# 2. OpenHands Desktop App
+Write-Host "`n-> [Opção 2] OpenHands Desktop (Agente Autônomo para Desenvolvimento)" -ForegroundColor Cyan
+Write-Host "   Plataforma desktop de agentes de código pronta para uso com LLMs customizados." -ForegroundColor White
 
 Write-Host "`n==============================================================================" -ForegroundColor White
-Write-Host "-> INSTRUÇÕES PARA ATIVAR NO CURSOR IDE:" -ForegroundColor Cyan
-Write-Host "  1. No Cursor, vá em Settings -> Models." -ForegroundColor White
-Write-Host "  2. Em OpenAI API Key, cole a APPKEY: $appKey" -ForegroundColor White
-Write-Host "  3. Em Override Base URL, coloque: http://localhost:20128/v1" -ForegroundColor White
-Write-Host "  4. Adicione os nomes dos Combos (ex: combo-coding, combo-refining) na lista de modelos!" -ForegroundColor White
+Write-Host "-> INSTRUÇÕES PARA ATIVAR NO OPENHANDS DESKTOP:" -ForegroundColor Cyan
+Write-Host "  1. Abra o OpenHands Desktop (https://openhands.dev)." -ForegroundColor White
+Write-Host "  2. Clique em Settings (ícone de engrenagem) -> aba LLM." -ForegroundColor White
+Write-Host "  3. Ative a opção 'Advanced options'." -ForegroundColor White
+Write-Host "  4. Configurações de Conexão:" -ForegroundColor White
+Write-Host "     - Custom Model: combo-coding" -ForegroundColor White
+Write-Host "     - Base URL    : http://localhost:20128/v1" -ForegroundColor White
+Write-Host "       (Obs: Se rodar o OpenHands em Docker, use: http://host.docker.internal:20128/v1)" -ForegroundColor DarkGray
+Write-Host "     - API Key     : $appKey" -ForegroundColor White
 Write-Host "==============================================================================" -ForegroundColor White
-Read-Host "[?] Concluiu ou anotou as instruções do Cursor? Pressione [ENTER] para continuar"
+Read-Host "[?] Anotou ou concluiu a configuração do OpenHands? Pressione [ENTER] para continuar"
 
 # ------------------------------------------------------------------------------
 # [+] Criação do Atalho 'omni' no Perfil do PowerShell
