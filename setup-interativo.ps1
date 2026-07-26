@@ -269,7 +269,14 @@ if (Test-Path $envFile) { $currentEnvLines = Get-Content $envFile -ErrorAction S
 $currentEnvLines += "OMNIROUTE_API_KEY=$appKey"
 Set-Content -Path $envFile -Value $currentEnvLines -Encoding UTF8
 Copy-Item -Path $envFile -Destination "$setupDir\.env" -Force -ErrorAction SilentlyContinue
-Write-Host "[OK] APPKEY registrada no ambiente!" -ForegroundColor Green
+
+if ($modo -eq "1") {
+    Write-Host "[>] Injetando OMNIROUTE_API_KEY no contêiner 'omniroute-custom'..." -ForegroundColor Cyan
+    & $engine exec omniroute-custom sh -c "mkdir -p /root/.omniroute && echo 'OMNIROUTE_API_KEY=$appKey' >> /root/.omniroute/.env" 2>$null
+    & $engine restart omniroute-custom 2>$null
+    Start-Sleep -Seconds 3
+}
+Write-Host "[OK] APPKEY registrada com sucesso no ambiente e no contêiner!" -ForegroundColor Green
 
 # ------------------------------------------------------------------------------
 # [+] ETAPA 4/5: Configuração e Mapeamento dos Combos Padrão no Gateway
@@ -363,7 +370,7 @@ if ($modo -eq "1") {
     $openhandsConfig = @{
         llm = @{
             model = "combo-coding"
-            base_url = "http://localhost:20128/v1"
+            base_url = "http://host.containers.internal:20128/v1"
             api_key = $appKey
         }
     } | ConvertTo-Json -Depth 5
@@ -375,7 +382,7 @@ if ($modo -eq "1") {
     & $engine rm -f openhands-app 2>$null
 
     Write-Host "  [>] Subindo contêiner 'openhands-app' na porta 3000 via $engine..." -ForegroundColor Cyan
-    & $engine run -d -t --name openhands-app -p 3000:3000 -e LLM_MODEL=combo-coding -e LLM_BASE_URL=http://localhost:20128/v1 -e LLM_API_KEY=$appKey ghcr.io/openhands/agent-server:latest
+    & $engine run -d -t --name openhands-app -p 3000:3000 -e LLM_MODEL=combo-coding -e LLM_BASE_URL=http://host.containers.internal:20128/v1 -e LLM_API_KEY=$appKey ghcr.io/openhands/agent-server:latest
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [ERROR] Falha ao criar o contêiner 'openhands-app' via $engine!" -ForegroundColor Red
