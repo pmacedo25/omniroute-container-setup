@@ -22,11 +22,10 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 # Link simbólico para garantir que o SQLite em /app aponte para o volume persistido em /root/.omniroute
-if [ ! -f "/root/.omniroute/storage.sqlite" ]; then
-    touch "/root/.omniroute/storage.sqlite"
+if [ -f "/root/.omniroute/storage.sqlite" ]; then
+    ln -sf "/root/.omniroute/storage.sqlite" "/app/storage.sqlite" 2>/dev/null || true
 fi
-ln -sf "/root/.omniroute/storage.sqlite" "/app/storage.sqlite"
-echo "[OK] [Container] Banco de dados vinculado ao volume persistente em /root/.omniroute."
+echo "[OK] [Container] Volume persistente montado em /root/.omniroute."
 
 # 2. Sincronização do Repositório de Skills via Git Clone Direto
 SKILLS_REPO=${GITHUB_SKILLS_REPO:-${OMNIROUTE_SKILLS_REPO:-"https://github.com/pmacedo25/project-agents-templates.git"}}
