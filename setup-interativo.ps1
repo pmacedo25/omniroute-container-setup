@@ -298,13 +298,18 @@ $instOpenHands = Read-Host "`n[?] Deseja instalar e configurar o OpenHands Deskt
 if ($instOpenHands -notmatch "^[nN]") {
     Write-Host "`n[>] [Instalação OpenHands] Verificando ambiente..." -ForegroundColor Cyan
     
+    # 1. Instalação do OpenHands via uv (gerenciador binário ultrarrápido sem necessidade de compilador Rust)
     $openhandsInstalled = $false
     if (Get-Command "openhands" -ErrorAction SilentlyContinue) {
         $openhandsInstalled = $true
         Write-Host "   [OK] Comando 'openhands' já instalado no sistema!" -ForegroundColor Green
-    } elseif (Get-Command "pip" -ErrorAction SilentlyContinue) {
-        Write-Host "   [>] Instalando 'openhands' via Python pip..." -ForegroundColor Cyan
-        pip install openhands --quiet 2>$null
+    } else {
+        if (-not (Get-Command "uv" -ErrorAction SilentlyContinue)) {
+            Write-Host "   [>] Instalando gerenciador de pacotes 'uv' via pip..." -ForegroundColor Cyan
+            C:\Python314\python.exe -m pip install uv --quiet 2>$null
+        }
+        Write-Host "   [>] Baixando e configurando OpenHands via 'uv' (pacotes binários pré-compilados)..." -ForegroundColor Cyan
+        & "$env:USERPROFILE\AppData\Roaming\Python\Python314\Scripts\uv.exe" tool install openhands 2>$null
         if (Get-Command "openhands" -ErrorAction SilentlyContinue) { $openhandsInstalled = $true }
     }
 
@@ -313,9 +318,10 @@ if ($instOpenHands -notmatch "^[nN]") {
         docker run -d --name openhands-app -p 3000:3000 ghcr.io/openhands/agent-server:latest 2>$null
     }
 
-    # Injeção Automática do Arquivo de Configuração do OpenHands (~/.openhands/agent_settings.json)
+    # 2. Injeção Automática do Arquivo de Configuração do OpenHands (~/.openhands/agent_settings.json)
     $openhandsDir = "$homeDir\.openhands"
-    if (-not (Test-Path $openhandsDir)) { New-Item -Path $openhandsDir -ItemType Directory -Force | Out-Null }
+    $binDir = "$openhandsDir\bin"
+    if (-not (Test-Path $binDir)) { New-Item -Path $binDir -ItemType Directory -Force | Out-Null }
     
     $openhandsConfig = @{
         llm = @{
@@ -331,49 +337,47 @@ if ($instOpenHands -notmatch "^[nN]") {
     [Environment]::SetEnvironmentVariable("LLM_API_KEY", $appKey, "User")
     Write-Host "  [OK] Configuração de LLM injetada em ~/.openhands/agent_settings.json!" -ForegroundColor Green
 
-    # Iniciar o servidor do OpenHands em background se a porta 3000 ainda não estiver ativa
-    $is3000Up = Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue
-    if (-not $is3000Up -and (Get-Command "openhands" -ErrorAction SilentlyContinue)) {
-        Write-Host "  [>] Iniciando o serviço local do OpenHands na porta 3000 em segundo plano..." -ForegroundColor Cyan
-        Start-Process -FilePath "cmd.exe" -ArgumentList "/c openhands serve" -WindowStyle Hidden
-    }
+    # 3. Criação do Script Lançador Autônomo (~/.openhands/bin/openhands-app.cmd)
+    # Este script garante que, ao clicar no atalho no Desktop, o servidor na porta 3000 é checado e iniciado automaticamente se estiver desligado.
+    $launcherCmd = @"
+@echo off
+set "PATH=%PATH%;C:\Python314;C:\Python314\Scripts;%USERPROFILE%\AppData\Roaming\Python\Python314\Scripts;%USERPROFILE%\AppData\Roaming\uv\tools;%USERPROFILE%\.local\bin"
 
-    # Aguarda o serviço estabilizar na porta 3000 antes de abrir a janela do aplicativo
-    Write-Host "  [...] Aguardando o serviço do OpenHands responder na porta 3000..." -ForegroundColor Yellow
-    $openhandsReady = $false
-    for ($i = 0; $i -lt 10; $i++) {
-        $conn3000 = Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue
-        if ($conn3000) { $openhandsReady = $true; break }
-        Start-Sleep -Seconds 2
-    }
+powershell -NoProfile -Command "Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet" | findstr /i "True" >nul 2>&1
+if errorlevel 1 (
+    echo [OpenHands Desktop App] Iniciando servidor do agente na porta 3000...
+    start /B cmd /c "uv tool run openhands serve > "%USERPROFILE%\.openhands\server.log" 2>&1"
+    powershell -NoProfile -Command "for (`$i=0; `$i -lt 15; `$i++) { if (Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet) { exit 0 }; Start-Sleep -Seconds 1 }; exit 1"
+)
 
-    # Criação do Aplicativo Desktop Nativo (Atalho .lnk na Área de Trabalho e Menu Iniciar)
+set "APP_BROWSER=msedge.exe"
+where msedge.exe >nul 2>&1
+if errorlevel 1 set "APP_BROWSER=chrome.exe"
+
+start "" %APP_BROWSER% --app=http://localhost:3000 --user-data-dir="%USERPROFILE%\.openhands\app_profile"
+"@
+    Set-Content -Path "$binDir\openhands-app.cmd" -Value $launcherCmd -Encoding UTF8
+
+    # 4. Criação do Atalho Desktop apontando para o Lançador Autônomo
     try {
         $wsh = New-Object -ComObject WScript.Shell
         $desktopPath = [System.Environment]::GetFolderPath('Desktop')
         $startMenuPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
         
-        $appBrowser = "msedge.exe"
-        if (-not (Get-Command "msedge" -ErrorAction SilentlyContinue)) {
-            if (Get-Command "chrome" -ErrorAction SilentlyContinue) { $appBrowser = "chrome.exe" }
-        }
-
         foreach ($dest in @("$desktopPath\OpenHands Desktop.lnk", "$startMenuPath\OpenHands Desktop.lnk")) {
             $sc = $wsh.CreateShortcut($dest)
-            $sc.TargetPath = $appBrowser
-            $sc.Arguments = "--app=http://localhost:3000 --user-data-dir=`"$homeDir\.openhands\app_profile`""
+            $sc.TargetPath = "$binDir\openhands-app.cmd"
+            $sc.WindowStyle = 7 # Janela minimizada/invisível
+            $sc.IconLocation = "msedge.exe,0"
             $sc.Description = "OpenHands Desktop AI Agent App"
             $sc.Save()
         }
         Write-Host "  [OK] Aplicativo 'OpenHands Desktop' instalado na Área de Trabalho e Menu Iniciar!" -ForegroundColor Green
     } catch {}
 
-    if ($openhandsReady) {
-        Write-Host "  [App] Serviço ONLINE na porta 3000! Abrindo a janela do aplicativo OpenHands Desktop..." -ForegroundColor Green
-        Start-Process -FilePath $appBrowser -ArgumentList "--app=http://localhost:3000 --user-data-dir=`"$homeDir\.openhands\app_profile`"" -ErrorAction SilentlyContinue
-    } else {
-        Write-Host "  [WARN] O serviço do OpenHands está inicializando. Abra o aplicativo pelo ícone 'OpenHands Desktop' na sua Área de Trabalho!" -ForegroundColor Yellow
-    }
+    # 5. Executa o lançador para subir o serviço e abrir a janela do aplicativo
+    Write-Host "  [App] Inicializando serviço e abrindo a janela do aplicativo OpenHands Desktop..." -ForegroundColor Cyan
+    Start-Process -FilePath "$binDir\openhands-app.cmd" -WindowStyle Hidden
 } else {
     Write-Host "[INFO] Instalação do OpenHands pulada. Você pode instalar quando quiser rodando o setup novamente." -ForegroundColor DarkGray
 }
