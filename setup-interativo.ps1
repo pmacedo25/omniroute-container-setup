@@ -1,13 +1,13 @@
 # ==============================================================================
 # [Setup Interativo] OmniRoute Gateway + Contas OAuth + IDEs Desktop (OpenHands Container / OpenCode Local)
-# Desenvolvido para Windows PowerShell (Suporte Prioritário ao Podman e Docker)
+# Desenvolvido para Windows PowerShell (Validação Estrita de Etapas e Suporte Nativo ao Podman/Docker)
 # ==============================================================================
 
 $OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PATH += ";C:\Program Files\RedHat\Podman;C:\Program Files\Podman;$env:APPDATA\npm;C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;C:\Python314;C:\Python314\Scripts;$env:USERPROFILE\AppData\Roaming\Python\Scripts"
 
 Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "=== ASSISTENTE DE SETUP OMNIROUTE 2026 (PODMAN, COMBOS & AGENTES NATIVOS) ===" -ForegroundColor Yellow
+Write-Host "=== ASSISTENTE DE SETUP OMNIROUTE 2026 (VALIDAÇÃO ESTRITA & PODMAN NATIVO) ===" -ForegroundColor Yellow
 Write-Host "==============================================================================" -ForegroundColor Cyan
 
 $setupDir = $PSScriptRoot
@@ -22,15 +22,15 @@ if (-not (Test-Path "$homeDir\.omniroute")) { New-Item -Path "$homeDir\.omnirout
 if (-not (Test-Path "$homeDir\.omniroute\logs")) { New-Item -Path "$homeDir\.omniroute\logs" -ItemType Directory -Force | Out-Null }
 
 # ------------------------------------------------------------------------------
-# [+] Função de Detecção Prioritária do Motor de Contêiner (Podman em 1º Lugar)
+# [+] Função de Detecção Exclusiva do Motor de Contêiner (Podman em 1º Lugar)
 # ------------------------------------------------------------------------------
 function Get-ContainerEngine {
     if (Get-Command "podman" -ErrorAction SilentlyContinue) { return "podman" }
-    if (Get-Command "docker" -ErrorAction SilentlyContinue) { return "docker" }
     if (Test-Path "C:\Program Files\RedHat\Podman\podman.exe") {
         $env:PATH += ";C:\Program Files\RedHat\Podman"
         return "podman"
     }
+    if (Get-Command "docker" -ErrorAction SilentlyContinue) { return "docker" }
     return ""
 }
 
@@ -48,26 +48,26 @@ if ($modo -eq "1") {
     
     Write-Host "`n[>] [Limpeza Modo Container] Verificando e removendo processos e vestígios locais nativos..." -ForegroundColor Yellow
     
-    # 1. Encerra qualquer instância Node.js/OmniRoute rodando localmente no Windows
+    # Encerra qualquer instância Node.js/OmniRoute rodando localmente no Windows
     Get-CimInstance Win32_Process -Filter "name='node.exe' or name='npx.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "20128" -or $_.CommandLine -match "omniroute" } | ForEach-Object { 
         Write-Host "   [>] Encerrando processo OmniRoute local (PID: $($_.ProcessId))..." -ForegroundColor Cyan
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue 
     }
     taskkill /F /IM node.exe 2>$null
     
-    # 2. Encerra qualquer serviço/instância do OpenHands rodando localmente no Windows
+    # Encerra qualquer serviço/instância do OpenHands rodando localmente no Windows
     Get-CimInstance Win32_Process -Filter "name='python.exe' or name='cmd.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "openhands" } | ForEach-Object {
         Write-Host "   [>] Encerrando processo OpenHands local (PID: $($_.ProcessId))..." -ForegroundColor Cyan
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     }
 
-    # 3. Remove variáveis de ambiente locais do Windows que não são mais necessárias
+    # Remove variáveis de ambiente locais do Windows
     [Environment]::SetEnvironmentVariable("LLM_MODEL", $null, "User")
     [Environment]::SetEnvironmentVariable("LLM_BASE_URL", $null, "User")
     [Environment]::SetEnvironmentVariable("LLM_API_KEY", $null, "User")
     Write-Host "   [OK] Variáveis de ambiente locais limpas das configurações do usuário!" -ForegroundColor Green
 
-    # 4. Remove atalhos antigos do OpenCode se existirem
+    # Remove atalhos antigos do OpenCode se existirem
     $desktopPath = [System.Environment]::GetFolderPath('Desktop')
     $startMenuPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
     Remove-Item "$desktopPath\OpenCode Desktop.lnk" -Force -ErrorAction SilentlyContinue
@@ -129,10 +129,10 @@ if (Test-Path "$skillsDir\.git") {
 Write-Host "[OK] Skills operacionais em ~/.omniroute/skills vinculadas a: $repoUrl" -ForegroundColor Green
 
 # ------------------------------------------------------------------------------
-# [+] ETAPA 3: Iniciação do Servidor Gateway
+# [+] ETAPA 3: Iniciação Validade do Servidor Gateway (Sem Mistura de Comandos)
 # ------------------------------------------------------------------------------
 if ($modo -eq "1") {
-    Write-Host "`n[Container] Verificando motor de contêiner (Podman em 1º Lugar)..." -ForegroundColor Cyan
+    Write-Host "`n[Container] Verificando motor de contêiner (Podman prioritário)..." -ForegroundColor Cyan
     $engine = Get-ContainerEngine
     
     if ([string]::IsNullOrWhiteSpace($engine)) {
@@ -147,19 +147,43 @@ if ($modo -eq "1") {
         }
         
         if ([string]::IsNullOrWhiteSpace($engine)) {
-            Write-Host "[WARN] Alternando automaticamente para o Modo Nativo Windows (2)..." -ForegroundColor Yellow
-            $modo = "2"
-            "OMNIROUTE_MODE=local" | Out-File -FilePath $modeFile -Encoding UTF8 -Force
+            Write-Host "[ERROR] Nenhum motor de contêiner disponível. Impossível continuar no Modo Contêiner." -ForegroundColor Red
+            return
         }
     }
 }
 
 if ($modo -eq "1") {
-    Write-Host "[OK] Motor de contêiner detectado: $engine" -ForegroundColor Green
-    Write-Host "[>] Subindo contêiner via $engine compose (Porta 20128)..." -ForegroundColor Cyan
+    Write-Host "[OK] Motor de contêiner exclusivo selecionado: $engine" -ForegroundColor Green
+    $containerSuccess = $false
+    
     Push-Location $setupDir
-    Invoke-Expression "$engine compose up -d --build"
+    
+    # 1. Tenta subir via compose
+    Write-Host "[>] Executando '$engine compose up -d'..." -ForegroundColor Cyan
+    & $engine compose up -d 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $containerSuccess = $true
+    } else {
+        Write-Host "   [WARN] '$engine compose' falhou ou não tem provider instalado. Alternando para subida nativa com '$engine run'..." -ForegroundColor Yellow
+        
+        # 2. Subida Nativa Direta via podman run / docker run (Zero dependência de podman-compose)
+        & $engine network create omniroute-net 2>$null
+        & $engine rm -f omniroute-gateway 2>$null
+        
+        Write-Host "   [>] Construindo imagem e criando contêiner 'omniroute-gateway' via $engine..." -ForegroundColor Cyan
+        & $engine build -t omniroute:latest . 2>&1 | Out-Null
+        & $engine run -d --name omniroute-gateway --network omniroute-net -p 20128:20128 -v "$homeDir\.omniroute:/root/.omniroute" omniroute:latest
+        
+        if ($LASTEXITCODE -eq 0) { $containerSuccess = $true }
+    }
     Pop-Location
+
+    if (-not $containerSuccess) {
+        Write-Host "[ERROR] Falha crítica ao iniciar o contêiner do OmniRoute Gateway via $engine!" -ForegroundColor Red
+        Write-Host "[STOP] O assistente não pode continuar sem o Gateway ativo." -ForegroundColor Red
+        return
+    }
 } else {
     Write-Host "`n[Local] Verificando Node.js / NPM..." -ForegroundColor Cyan
     if (-not (Get-Command "node" -ErrorAction SilentlyContinue)) {
@@ -175,20 +199,27 @@ if ($modo -eq "1") {
     Start-Process -FilePath "cmd.exe" -ArgumentList $cmdArgs -WindowStyle Hidden
 }
 
-Write-Host "[...] Aguardando 5 segundos para o servidor estabilizar na porta 20128..." -ForegroundColor Yellow
-Start-Sleep -Seconds 5
-
+# Validação Ativa de Conexão na Porta 20128 com Leitura de Logs em Caso de Erro
+Write-Host "[...] Aguardando o servidor OmniRoute Gateway responder na porta 20128..." -ForegroundColor Yellow
 $serverUp = $false
-for ($i = 0; $i -lt 5; $i++) {
+for ($i = 0; $i -lt 10; $i++) {
     $conn = Test-NetConnection -ComputerName localhost -Port 20128 -InformationLevel Quiet -ErrorAction SilentlyContinue
     if ($conn) { $serverUp = $true; break }
     Start-Sleep -Seconds 2
 }
 
 if ($serverUp) {
-    Write-Host "[OK] Servidor OmniRoute Gateway ONLINE na porta 20128!" -ForegroundColor Green
+    Write-Host "[OK] Servidor OmniRoute Gateway ONLINE e respondendo na porta 20128!" -ForegroundColor Green
 } else {
-    Write-Host "[WARN] O servidor demorou a responder na porta 20128. Verifique o log em: $logFile" -ForegroundColor Yellow
+    Write-Host "[ERROR] O servidor não respondeu na porta 20128 após 20 segundos!" -ForegroundColor Red
+    if ($modo -eq "1") {
+        Write-Host "[LOGS] Logs do contêiner 'omniroute-gateway':" -ForegroundColor Yellow
+        & $engine logs --tail 30 omniroute-gateway
+    } else {
+        if (Test-Path $logFile) { Get-Content $logFile -Tail 30 }
+    }
+    Write-Host "[STOP] Interrompendo a execução devido a erro de inicialização do Gateway." -ForegroundColor Red
+    return
 }
 
 # ------------------------------------------------------------------------------
@@ -302,13 +333,13 @@ try {
 } catch {}
 
 # ------------------------------------------------------------------------------
-# [+] ETAPA 5: Instalação Automática da IDE/Agente Desktop Específico por Modo
+# [+] ETAPA 5: Instalação Validade da IDE/Agente Desktop Específico
 # ------------------------------------------------------------------------------
 Write-Host "`n[+] [ETAPA 5/5] Configuração da IDE/Agente Desktop (OpenHands no Container / OpenCode no Local)" -ForegroundColor Yellow
 
 if ($modo -eq "1") {
     # --------------------------------------------------------------------------
-    # MODO CONTAINER: Configuração e Lançamento do OpenHands via Podman/Docker
+    # MODO CONTAINER: Configuração e Lançamento Nativo do OpenHands via $engine
     # --------------------------------------------------------------------------
     Write-Host "[>] Configurando OpenHands no Modo Container via $engine..." -ForegroundColor Cyan
     
@@ -325,24 +356,41 @@ if ($modo -eq "1") {
     } | ConvertTo-Json -Depth 5
 
     Set-Content -Path "$openhandsDir\agent_settings.json" -Value $openhandsConfig -Encoding UTF8
-    [Environment]::SetEnvironmentVariable("LLM_MODEL", "combo-coding", "User")
-    [Environment]::SetEnvironmentVariable("LLM_BASE_URL", "http://localhost:20128/v1", "User")
-    [Environment]::SetEnvironmentVariable("LLM_API_KEY", $appKey, "User")
     Write-Host "  [OK] Configuração de LLM injetada em ~/.openhands/agent_settings.json!" -ForegroundColor Green
 
-    # Subida do Contêiner do OpenHands via Podman ou Docker
-    Write-Host "  [>] Subindo contêiner do OpenHands na porta 3000 via $engine..." -ForegroundColor Cyan
-    Invoke-Expression "$engine run -d --name openhands-app -p 3000:3000 -e LLM_MODEL=combo-coding -e LLM_BASE_URL=http://localhost:20128/v1 -e LLM_API_KEY=$appKey ghcr.io/openhands/agent-server:latest" 2>$null
+    # Para e recria contêiner antigo se existir
+    & $engine rm -f openhands-app 2>$null
 
-    # Lançador Autônomo do OpenHands Desktop
+    Write-Host "  [>] Subindo contêiner 'openhands-app' na porta 3000 via $engine..." -ForegroundColor Cyan
+    & $engine run -d --name openhands-app --network omniroute-net -p 3000:3000 -e LLM_MODEL=combo-coding -e LLM_BASE_URL=http://localhost:20128/v1 -e LLM_API_KEY=$appKey ghcr.io/openhands/agent-server:latest
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [ERROR] Falha ao criar o contêiner 'openhands-app' via $engine!" -ForegroundColor Red
+        return
+    }
+
+    # Validação Ativa da Porta 3000 antes de registrar e abrir o aplicativo
+    Write-Host "  [...] Aguardando o OpenHands responder na porta 3000..." -ForegroundColor Yellow
+    $openhandsUp = $false
+    for ($i = 0; $i -lt 15; $i++) {
+        $conn3000 = Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue
+        if ($conn3000) { $openhandsUp = $true; break }
+        Start-Sleep -Seconds 2
+    }
+
+    if (-not $openhandsUp) {
+        Write-Host "  [WARN] O contêiner do OpenHands está inicializando. Os logs podem ser acompanhados com '$engine logs openhands-app'." -ForegroundColor Yellow
+    }
+
+    # Lançador Autônomo usando EXCLUSIVAMENTE o motor ($engine) detectado (100% Podman ou 100% Docker)
     $launcherCmd = @"
 @echo off
 set "PATH=%PATH%;C:\Program Files\RedHat\Podman;C:\Program Files\Podman"
 
 powershell -NoProfile -Command "Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet" | findstr /i "True" >nul 2>&1
 if errorlevel 1 (
-    echo [OpenHands Desktop App] Garantindo contêiner do agente rodando na porta 3000...
-    podman start openhands-app 2>nul || docker start openhands-app 2>nul || podman run -d --name openhands-app -p 3000:3000 ghcr.io/openhands/agent-server:latest 2>nul || docker run -d --name openhands-app -p 3000:3000 ghcr.io/openhands/agent-server:latest 2>nul
+    echo [OpenHands Desktop App] Garantindo contêiner do agente rodando na porta 3000 via $engine...
+    $engine start openhands-app 2>nul || $engine run -d --name openhands-app --network omniroute-net -p 3000:3000 -e LLM_MODEL=combo-coding -e LLM_BASE_URL=http://localhost:20128/v1 -e LLM_API_KEY=$appKey ghcr.io/openhands/agent-server:latest 2>nul
     powershell -NoProfile -Command "for (`$i=0; `$i -lt 15; `$i++) { if (Test-NetConnection -ComputerName localhost -Port 3000 -InformationLevel Quiet) { exit 0 }; Start-Sleep -Seconds 1 }; exit 1"
 )
 
@@ -364,13 +412,13 @@ start "" %APP_BROWSER% --app=http://localhost:3000 --user-data-dir="%USERPROFILE
             $sc.TargetPath = "$binDir\openhands-app.cmd"
             $sc.WindowStyle = 7
             $sc.IconLocation = "msedge.exe,0"
-            $sc.Description = "OpenHands Desktop AI Agent App (Podman/Docker)"
+            $sc.Description = "OpenHands Desktop AI Agent App ($engine)"
             $sc.Save()
         }
         Write-Host "  [OK] Aplicativo 'OpenHands Desktop' registrado na Área de Trabalho!" -ForegroundColor Green
     } catch {}
 
-    Write-Host "  [App] Serviço ONLINE na porta 3000! Abrindo o aplicativo OpenHands Desktop..." -ForegroundColor Green
+    Write-Host "  [App] Abrindo o aplicativo OpenHands Desktop..." -ForegroundColor Green
     Start-Process -FilePath "$binDir\openhands-app.cmd" -WindowStyle Hidden
 
 } else {
@@ -396,7 +444,6 @@ start "" %APP_BROWSER% --app=http://localhost:3000 --user-data-dir="%USERPROFILE
     }
     Write-Host "  [OK] Configuração injetada em ~/.opencode/config.json e APPDATA!" -ForegroundColor Green
 
-    # Criação do Atalho Desktop do OpenCode
     try {
         $wsh = New-Object -ComObject WScript.Shell
         $desktopPath = [System.Environment]::GetFolderPath('Desktop')
@@ -427,7 +474,7 @@ if (-not (Test-Path $profilePath)) {
 
 $omniFunction = @"
 
-# --- Atalho OmniRoute Gateway (Gerenciamento 2026 com Suporte Prioritário ao Podman e Docker) ---
+# --- Atalho OmniRoute Gateway (Gerenciamento 2026 com Validação e Suporte NATIVO ao Motor $engine) ---
 function omni {
     param([string]`$Action = "status", [string]`$Arg1 = "")
     `$setupDir = "$setupDir"
@@ -443,16 +490,17 @@ function omni {
         if (`$line -match "container") { `$mode = "container" }
     }
     
-    `$engine = "docker"
-    if (Get-Command "podman" -ErrorAction SilentlyContinue) { `$engine = "podman" }
-    elseif (Test-Path "C:\Program Files\RedHat\Podman\podman.exe") { `$engine = "podman" }
+    `$engine = "podman"
+    if (-not (Get-Command "podman" -ErrorAction SilentlyContinue) -and -not (Test-Path "C:\Program Files\RedHat\Podman\podman.exe")) {
+        if (Get-Command "docker" -ErrorAction SilentlyContinue) { `$engine = "docker" }
+    }
     
     switch (`$Action.ToLower()) {
         "status" {
             Write-Host "[`$(`$mode.ToUpper())] Status do Gateway (Motor: `$engine):" -ForegroundColor Cyan
             `$conn = Test-NetConnection -ComputerName localhost -Port 20128 -InformationLevel Quiet -ErrorAction SilentlyContinue
             if (`$conn) { 
-                if (`$mode -eq "container") { Write-Host "[OK] Contêiner OmniRoute Gateway online e respondendo na porta 20128 via `$engine!" -ForegroundColor Green }
+                if (`$mode -eq "container") { Write-Host "[OK] Contêiner OmniRoute Gateway online na porta 20128 via `$engine!" -ForegroundColor Green }
                 else { Write-Host "[OK] Gateway Nativo RODANDO invisível na porta 20128!" -ForegroundColor Green }
             } else { Write-Host "[ERROR] Gateway PARADO na porta 20128. Digite 'omni restart' para iniciar." -ForegroundColor Red }
         }
@@ -472,9 +520,7 @@ function omni {
         "restart" {
             if (`$mode -eq "container") {
                 Write-Host "[`$engine] Reiniciando container 'omniroute-gateway'..." -ForegroundColor Yellow
-                Push-Location `$setupDir
-                Invoke-Expression "`$engine compose restart"
-                Pop-Location
+                Invoke-Expression "`$engine restart omniroute-gateway" 2>`$null
                 Write-Host "[OK] Container reiniciado com sucesso via `$engine!" -ForegroundColor Green
             } else {
                 Write-Host "[Local] Reiniciando Gateway em background invisível..." -ForegroundColor Yellow
@@ -531,7 +577,7 @@ if ($profileContent -match "function omni \{") {
     Add-Content -Path $profilePath -Value "`n$omniFunction" -Encoding UTF8
 }
 
-Write-Host "[OK] Comando 'omni' atualizado no PowerShell com suporte prioritário ao Podman!" -ForegroundColor Green
+Write-Host "[OK] Comando 'omni' atualizado no PowerShell!" -ForegroundColor Green
 
 Write-Host "`n==============================================================================" -ForegroundColor Cyan
 Write-Host "=== SETUP CONCLUÍDO COM SUCESSO! AMBIENTE IA PRONTO PARA USO ===" -ForegroundColor Green
