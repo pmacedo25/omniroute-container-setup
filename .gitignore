@@ -4,7 +4,7 @@
 *.env.*
 !.env.example
 
-# Skills and external repositories (Excluded per user request)
+# Skills and external repositories
 skills-repo/
 skills/
 *.skills/
@@ -22,9 +22,13 @@ logs/
 tmp/
 temp/
 *.tmp
+.test-home/
+.runtime/
 
 # OS and Editor files
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+__pycache__/
+*.pyc

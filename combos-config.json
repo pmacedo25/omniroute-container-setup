@@ -1,101 +1,68 @@
 {
-  "version": "2.1-2026",
-  "description": "Configuração de Combos OmniRoute (pmacedo25 setup - Exclusivo para Contas Anthropic, Copilot e GPT/OpenAI)",
-  "authentication_mode": "ide_account_oauth",
-  "note": "A autenticação é feita conectando suas contas (Claude Pro, ChatGPT Plus, GitHub Copilot, Codex) no Dashboard Web em http://localhost:20128/dashboard",
+  "version": 1,
   "combos": [
     {
       "name": "combo-coding",
-      "alias": ["coding", "dev", "code-default"],
-      "description": "Combo de Programação Ativa (Geração rápida, moderna e precisa focada no ecossistema Anthropic, GPT e Copilot)",
-      "strategy": "priority_fallback",
-      "targets": [
-        {
-          "provider": "anthropic-ide-account",
-          "model": "claude-sonnet-4-6",
-          "priority": 1,
-          "note": "Claude Sonnet 4.6 via conta Anthropic (Velocidade máxima e precisão em sintaxe moderna)"
-        },
-        {
-          "provider": "openai-ide-account",
-          "model": "gpt-5.4",
-          "priority": 2,
-          "note": "GPT-5.4 como fallback imediato para geração pesada de funcionalidades"
-        },
-        {
-          "provider": "copilot-account",
-          "model": "copilot-gpt-5",
-          "priority": 3,
-          "note": "Fallback através da assinatura do GitHub Copilot para manter o fluxo ininterrupto"
+      "description": "Fluxo diário de programação, equilibrando qualidade, latência e custo.",
+      "strategy": "priority",
+      "models": [
+        "antigravity/gemini-3.1-pro-low",
+        "codex/gpt-5.5-medium",
+        "antigravity/claude-sonnet-4-6"
+      ],
+      "context_cache_protection": true,
+      "context_length": 272000,
+      "config": {
+        "compressionMode": "stacked",
+        "failoverBeforeRetry": true,
+        "maxRetries": 0,
+        "trackMetrics": true,
+        "responseValidation": {
+          "minContentLength": 1
         }
-      ]
+      }
     },
     {
       "name": "combo-refining",
-      "alias": ["refining", "architecture", "thinking", "deep"],
-      "description": "Combo de Refinamento, Arquitetura e Raciocínio Profundo (Code review, design de sistemas complexos, refatorações pesadas)",
-      "strategy": "priority_fallback",
-      "targets": [
-        {
-          "provider": "anthropic-ide-account",
-          "model": "claude-opus-4-7",
-          "params": { "thinking": true, "budget_tokens": 16384 },
-          "priority": 1,
-          "note": "Claude Opus 4.7 com Thinking Mode ativado: o topo de linha para raciocínio e arquitetura"
-        },
-        {
-          "provider": "openai-ide-account",
-          "model": "gpt-5.5",
-          "params": { "reasoning_effort": "high" },
-          "priority": 2,
-          "note": "GPT-5.5 Reasoner: raciocínio avançado da OpenAI para validação estrutural"
-        },
-        {
-          "provider": "anthropic-ide-account",
-          "model": "claude-opus-4-6",
-          "priority": 3,
-          "note": "Claude Opus 4.6 como terceira camada de fallback de alta capacidade"
+      "description": "Arquitetura, revisão e raciocínio profundo.",
+      "strategy": "priority",
+      "models": [
+        "codex/gpt-5.5-high",
+        "antigravity/claude-sonnet-4-6",
+        "antigravity/gemini-3.1-pro-high"
+      ],
+      "context_cache_protection": true,
+      "context_length": 272000,
+      "config": {
+        "compressionMode": "stacked",
+        "failoverBeforeRetry": true,
+        "maxRetries": 0,
+        "trackMetrics": true,
+        "responseValidation": {
+          "minContentLength": 1
         }
-      ]
+      }
     },
     {
       "name": "combo-testing",
-      "alias": ["testing", "qa", "unit-tests", "fast-tests"],
-      "description": "Combo de Testes Unitários, QA e Documentação Rápida (Otimizado para extrema velocidade e preservação de cotas principais)",
-      "strategy": "speed_quota_optimized",
-      "targets": [
-        {
-          "provider": "openai-ide-account",
-          "model": "gpt-5-mini",
-          "priority": 1,
-          "note": "GPT-5-Mini: modelo ultrarrápido e leve, economiza cota das contas principais para gerar testes"
-        },
-        {
-          "provider": "anthropic-ide-account",
-          "model": "claude-haiku-4-5",
-          "priority": 2,
-          "note": "Claude Haiku 4.5: agilidade na geração de mocks, asserts e documentação técnica"
-        },
-        {
-          "provider": "copilot-account",
-          "model": "copilot-fast",
-          "priority": 3,
-          "note": "Copilot Fast Mode: geração de boilerplate sem consumir limites diários de Claude/GPT"
+      "description": "Testes, exploração e tarefas rápidas priorizando o menor custo.",
+      "strategy": "priority",
+      "models": [
+        "antigravity/gemini-3.1-flash-lite",
+        "codex/gpt-5.3-codex-spark",
+        "antigravity/gpt-oss-120b-medium"
+      ],
+      "context_cache_protection": true,
+      "context_length": 272000,
+      "config": {
+        "compressionMode": "stacked",
+        "failoverBeforeRetry": true,
+        "maxRetries": 0,
+        "trackMetrics": true,
+        "responseValidation": {
+          "minContentLength": 1
         }
-      ]
+      }
     }
-  ],
-  "token_optimization": {
-    "rtk_token_saver": {
-      "enabled": true,
-      "compress_git_diffs": true,
-      "compress_terminal_logs": true,
-      "max_output_lines": 120,
-      "note": "Comprime saídas verbosas de terminal (git, grep, npm test) cortando até 40% de tokens de entrada"
-    },
-    "caveman_mode": {
-      "enabled": true,
-      "instruction": "Respond ONLY with direct technical solutions, clean code, or precise explanations. Zero conversational filler."
-    }
-  }
+  ]
 }

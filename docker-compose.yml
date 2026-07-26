@@ -1,35 +1,83 @@
-version: '3.8'
+name: omniroute-setup
 
 services:
-  omniroute-custom:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    image: omniroute-custom:latest
-    container_name: omniroute-custom
+  omniroute:
+    image: diegosouzapw/omniroute:${OMNIROUTE_VERSION:-3.8.48}
+    container_name: omniroute
     restart: unless-stopped
-    tty: true
-    stdin_open: true
-    ports:
-      - "20128:20128" # Porta padrão do OmniRoute Gateway
+    stop_grace_period: 40s
     env_file:
-      - .env # Carrega variáveis locais geradas pelo setup (como OMNIROUTE_API_KEY)
+      - .env
     environment:
-      - PORT=20128
-      - NODE_OPTIONS=--max-old-space-size=4096 # Evita erro out of memory no SQLite WASM (sql.js)
-      - ENABLE_RTK=true                        # Ativa o RTK Token Saver (Compressão de terminal/git)
-      - CAVEMAN_MODE=true                      # Ativa o modo conciso para economizar tokens de resposta
-      - GITHUB_SKILLS_REPO=${OMNIROUTE_SKILLS_REPO:-https://github.com/pmacedo25/project-agents-templates.git}
-      - GITHUB_BRANCH=main
-      # Conecte suas contas diretamente pelo Dashboard Web em http://localhost:20128/dashboard
+      DATA_DIR: /app/data
+      PORT: ${PORT:-20128}
+      HOSTNAME: 0.0.0.0
+      REQUIRE_API_KEY: "true"
+      OMNIROUTE_MEMORY_MB: ${OMNIROUTE_MEMORY_MB:-1024}
+    ports:
+      # Agent sandboxes reach OmniRoute through the container host gateway.
+      - "${PORT:-20128}:${PORT:-20128}"
     volumes:
-      # Persiste todo o diretório de configuração do OmniRoute (banco SQLite e chaves de criptografia .env)
-      - omniroute_data:/root/.omniroute
-      # Pasta onde as Skills baixadas do GitHub ficarão como um repositório Git vivo e dinâmico
-      - omniroute_skills:/root/.omniroute/skills
-      # Monta o arquivo de configuração de Combos inicial
-      - ./combos-config.json:/app/combos-config.json:ro
+      - omniroute-data:/app/data
+      - omniroute-skills:/app/data/skills:ro
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.mjs"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  skills-sync:
+    build:
+      context: ./skills-sync
+      dockerfile: Dockerfile
+    image: omniroute-skills-sync:1
+    restart: unless-stopped
+    environment:
+      OMNIROUTE_SKILLS_REPO: ${OMNIROUTE_SKILLS_REPO}
+      OMNIROUTE_SKILLS_BRANCH: ${OMNIROUTE_SKILLS_BRANCH:-main}
+      SKILLS_SYNC_INTERVAL_SECONDS: ${SKILLS_SYNC_INTERVAL_SECONDS:-3600}
+    volumes:
+      - omniroute-skills:/skills
+
+  openhands:
+    build:
+      context: ./openhands
+      dockerfile: Dockerfile
+      args:
+        OPENHANDS_VERSION: ${OPENHANDS_VERSION:-1.7}
+    image: omniroute-openhands:${OPENHANDS_VERSION:-1.7}
+    container_name: openhands-app
+    restart: unless-stopped
+    profiles: ["openhands"]
+    depends_on:
+      omniroute:
+        condition: service_healthy
+    environment:
+      LLM_MODEL: openai/combo-coding
+      LLM_BASE_URL: http://host.docker.internal:${PORT:-20128}/v1
+      LLM_API_KEY: ${OMNIROUTE_API_KEY}
+      LOG_ALL_EVENTS: "true"
+      AGENT_SERVER_IMAGE_REPOSITORY: ghcr.io/openhands/agent-server
+      AGENT_SERVER_IMAGE_TAG: ${OPENHANDS_AGENT_SERVER_TAG:-1.19.1-python}
+      SANDBOX_VOLUMES: ${SANDBOX_VOLUMES}
+      SANDBOX_ENV_GH_TOKEN: ${GITHUB_TOKEN:-}
+    ports:
+      # Agent sandboxes use this host-gateway port for webhooks and MCP.
+      - "${OPENHANDS_PORT:-3000}:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${CONTAINER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - type: bind
+        source: ${OPENHANDS_HOME_DIR}
+        target: /.openhands
+      - type: bind
+        source: ${PROJECTS_DIR}
+        target: /opt/workspace_base
 
 volumes:
-  omniroute_data:
-  omniroute_skills:
+  omniroute-data:
+    name: omniroute-data
+  omniroute-skills:
+    name: omniroute-skills
