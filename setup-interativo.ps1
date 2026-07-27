@@ -8,7 +8,7 @@ param(
     [string]$ProjectsPath,
     [int]$Port = 20128,
     [Alias("OpenRouterAIRepository")]
-    [string]$AchillesRepository = "pmacedo25/Achilles",
+    [string]$AchillesRepository = "pmacedo25/Achilles-Releases",
     [Alias("OpenRouterAIVersion")]
     [string]$AchillesVersion = "latest",
     [Alias("OpenRouterAIArtifactPath")]

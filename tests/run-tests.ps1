@@ -98,6 +98,7 @@ try {
     Assert-True $checksumRejected "Checksum adulterado deve ser rejeitado"
 
     $setupSource = Get-Content (Join-Path $projectDirectory "setup-interativo.ps1") -Raw
+    $envExampleSource = Get-Content (Join-Path $projectDirectory ".env.example") -Raw
     $moduleSource = Get-Content (Join-Path $projectDirectory "scripts\OmniRoute.Setup.psm1") -Raw
     $achillesModuleSource = Get-Content (Join-Path $projectDirectory "scripts\Achilles.Setup.psm1") -Raw
     $composeSource = Get-Content (Join-Path $projectDirectory "docker-compose.yml") -Raw
@@ -154,6 +155,8 @@ try {
     Assert-True ($achillesModuleSource -match 'legacyStatePreserved = \$true') "Migração deve documentar rollback"
     Assert-True ($achillesModuleSource -match '\^Achilles-win-x64-') "Release deve selecionar somente artefatos Achilles"
     Assert-True ($achillesModuleSource -match 'pmacedo25/Achilles-Releases') "Instalador deve usar o repositório público de binários"
+    Assert-True ($setupSource -match 'AchillesRepository = "pmacedo25/Achilles-Releases"') "Script principal deve encaminhar o repositório público"
+    Assert-True ($envExampleSource -match 'ACHILLES_REPOSITORY=pmacedo25/Achilles-Releases') "Exemplo de ambiente deve usar o repositório público"
     Assert-True ($achillesModuleSource -match 'api\.github\.com/repos/\$Repository/releases') "Release público deve ser consultado sem GitHub CLI"
     Assert-True ($achillesModuleSource -notmatch 'GitHub CLI é necessário para baixar') "Download público do Achilles não deve exigir autenticação"
     Assert-True ($achillesModuleSource -match 'não contém um build Achilles para Windows x64') "Release legado deve produzir erro acionável"
