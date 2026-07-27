@@ -1,4 +1,4 @@
-# OpenRouterAI — plano de implementação multiagente
+# Achilles — plano de implementação multiagente
 
 ## 1. Objetivo e limites
 
@@ -7,7 +7,7 @@ no Eclipse Theia. O objetivo é testar a integração OmniRoute + IDE customizad
 os três combos e a economia de tokens. Não é objetivo inicial criar uma
 distribuição pública, serviço SaaS ou produto que exija manutenção contínua.
 
-O OpenRouterAI:
+O Achilles:
 
 - roda como aplicativo Electron no Windows, sem contêiner;
 - abre diretamente `%USERPROFILE%\workspace`;
@@ -22,7 +22,7 @@ O OpenRouterAI:
 ## 2. Decisão arquitetural
 
 O chamado “plugin OmniRoute” é uma extensão Theia embutida no build do
-OpenRouterAI. Ela não contém o gateway. Suas responsabilidades são:
+Achilles. Ela não contém o gateway. Suas responsabilidades são:
 
 1. descobrir `http://localhost:20128`;
 2. ler a AppKey do ambiente/configuração gerenciada pelo instalador;
@@ -34,9 +34,9 @@ OpenRouterAI. Ela não contém o gateway. Suas responsabilidades são:
 8. coletar métricas locais de benchmark sem enviar telemetria externa.
 
 ```text
-OpenRouterAI (Electron/Theia)
+Achilles (Electron/Theia)
   ├─ workspace local e terminal Windows
-  ├─ extensão openrouterai-omniroute
+  ├─ extensão achilles-omniroute
   ├─ agentes Explorer/Coder/Tester/Reviewer/Architect
   └─ HTTP OpenAI-compatible → OmniRoute localhost:20128
                                   └─ providers e combos
@@ -44,7 +44,7 @@ OpenRouterAI (Electron/Theia)
 
 ## 3. Repositórios
 
-### Repositório novo: `OpenRouterAI`
+### Repositório novo: `Achilles`
 
 Contém a aplicação Theia, extensões, identidade visual, testes e workflow que
 gera o ZIP portátil e o instalador por usuário.
@@ -52,11 +52,11 @@ gera o ZIP portátil e o instalador por usuário.
 Estrutura desejada:
 
 ```text
-OpenRouterAI/
+Achilles/
   applications/electron/
-  extensions/openrouterai-product/
-  extensions/openrouterai-omniroute/
-  extensions/openrouterai-benchmark/
+  extensions/achilles-product/
+  extensions/achilles-omniroute/
+  extensions/achilles-benchmark/
   resources/icons/
   scripts/
   tests/unit/
@@ -70,7 +70,7 @@ OpenRouterAI/
 
 Continua dono do provisionamento. Receberá:
 
-- versão e URL do artefato OpenRouterAI;
+- versão e URL do artefato Achilles;
 - download com checksum;
 - instalação em escopo de usuário;
 - configuração inicial;
@@ -78,14 +78,14 @@ Continua dono do provisionamento. Receberá:
 - atualização/reinstalação idempotente;
 - diagnóstico e remoção opcional.
 
-O repositório remoto `OpenRouterAI` precisa ser identificado por URL antes do
+O repositório remoto `Achilles` precisa ser identificado por URL antes do
 primeiro push. Não criar automaticamente outro repositório com o mesmo nome.
 
 ## 4. Contratos entre os repositórios
 
 ### Arquivo gerenciado pelo instalador
 
-`%USERPROFILE%\.openrouterai\config.json`
+`%USERPROFILE%\.achilles\config.json`
 
 ```json
 {
@@ -109,15 +109,15 @@ A AppKey não será duplicada nesse JSON. A IDE a recebe pela variável de usuá
 
 ### Contrato de release
 
-Cada release privada do OpenRouterAI publica:
+Cada release privada do Achilles publica:
 
-- `OpenRouterAI-win-x64-<version>.zip`, obrigatório para instalação sem elevação;
-- `OpenRouterAI-Setup-<version>.exe`, útil para instalação manual;
+- `Achilles-win-x64-<version>.zip`, obrigatório para instalação sem elevação;
+- `Achilles-Setup-<version>.exe`, útil para instalação manual;
 - `SHA256SUMS`;
 - `release-manifest.json`, contendo versão, URL, SHA-256 e versão mínima do setup.
 
 Para o protótipo, o script usa preferencialmente o ZIP portátil e extrai em
-`%LOCALAPPDATA%\Programs\OpenRouterAI\<version>`. Um arquivo `current.json`
+`%LOCALAPPDATA%\Programs\Achilles\<version>`. Um arquivo `current.json`
 aponta a versão ativa. Isso evita UAC e facilita rollback.
 
 ## 5. Plano por agentes
@@ -133,7 +133,7 @@ Dependências: URL do repositório privado.
 Entregas:
 
 - clonar o template `eclipse-theia/theia-ide` em versão fixa;
-- renomear pacotes e produto para OpenRouterAI;
+- renomear pacotes e produto para Achilles;
 - fixar Node, Yarn e Theia;
 - habilitar build Electron x64 com esbuild;
 - registrar comandos de build reproduzíveis;
@@ -153,9 +153,9 @@ Caminhos exclusivos: `resources/`, extensão de produto e `electron-builder.yml`
 
 Entregas:
 
-- aplicar nome OpenRouterAI, ícones, splash e About;
+- aplicar nome Achilles, ícones, splash e About;
 - gerar PNGs 16/24/32/48/64/128/256/512 e ICO multi-resolução;
-- configurar AppUserModelID `OpenRouterAI.Desktop`;
+- configurar AppUserModelID `Achilles.Desktop`;
 - empacotar ZIP portátil e EXE NSIS por usuário;
 - impedir instalação em `Program Files`;
 - desabilitar telemetria upstream por padrão.
@@ -169,14 +169,14 @@ Aceite:
 
 ### Agente 2 — provider OmniRoute
 
-Caminho exclusivo: `extensions/openrouterai-omniroute/`.
+Caminho exclusivo: `extensions/achilles-omniroute/`.
 
 Entregas:
 
 - implementar serviço de configuração e health check;
 - registrar somente o provider OmniRoute;
 - catálogo fechado dos três combos;
-- seletor no chat e comando “OpenRouterAI: Select Combo”;
+- seletor no chat e comando “Achilles: Select Combo”;
 - reasoning Off/Low/Medium/High, com defaults por agente;
 - mascarar segredos em logs e erros;
 - mensagens de reparo que apontem para `omni doctor`.
@@ -235,7 +235,7 @@ Aceite:
 
 ### Agente 5 — benchmark
 
-Caminho exclusivo: `extensions/openrouterai-benchmark/` e `benchmarks/`.
+Caminho exclusivo: `extensions/achilles-benchmark/` e `benchmarks/`.
 
 Entregas:
 
@@ -259,16 +259,16 @@ Caminho exclusivo: repositório `omniroute-container-setup`.
 
 Entregas:
 
-- `Install-OpenRouterAI`, `Update-OpenRouterAI` e `Test-OpenRouterAI`;
+- `Install-Achilles`, `Update-Achilles` e `Test-Achilles`;
 - baixar release privada via `gh release download` ou URL autenticada;
-- aceitar `-OpenRouterAIArtifactPath` para testes locais sem GitHub;
+- aceitar `-AchillesArtifactPath` para testes locais sem GitHub;
 - validar SHA-256 antes de extrair;
 - instalar em `%LOCALAPPDATA%` sem UAC;
 - escrita atômica de `current.json`;
 - criar atalhos `.lnk` com ícone próprio;
 - preservar versão anterior para rollback;
 - configurar workspace, endpoint e variável AppKey;
-- incluir OpenRouterAI no `omni doctor`.
+- incluir Achilles no `omni doctor`.
 
 Aceite:
 
@@ -318,7 +318,7 @@ Aceite:
 - commit e artefatos correspondem;
 - hashes publicados são reproduzíveis;
 - instalação ponta a ponta funciona em usuário sem admin;
-- OpenRouterAI abre o workspace e completa uma tarefa simples.
+- Achilles abre o workspace e completa uma tarefa simples.
 
 ## 6. Ordem e paralelismo
 
@@ -366,7 +366,7 @@ Todo resultado do CLI precisa virar diff revisável e passar pelos mesmos testes
 
 - Fixar uma versão Theia durante todo o experimento.
 - Não criar atualização automática do framework no MVP.
-- Atualização do OpenRouterAI ocorre apenas quando publicarmos nova release.
+- Atualização do Achilles ocorre apenas quando publicarmos nova release.
 - `electron-updater` fica fora do primeiro protótipo; o script OmniRoute controla
   download, ativação e rollback.
 - Manter no máximo duas versões locais.
@@ -390,7 +390,7 @@ bloqueados enquanto a IDE estiver aberta.
 - Nunca construir Theia na máquina final; apenas baixar artefato pronto.
 - Preservar `appId` e IDs de preferências entre releases.
 - Desabilitar o `electron-updater` do template para não competir com o setup.
-- `OpenRouterAI` pode ser confundido com o serviço OpenRouter; o README deve
+- `Achilles` pode ser confundido com o serviço OpenRouter; o README deve
   declarar que não há afiliação e o nome deve ser revisto antes de distribuição.
 
 Essa abordagem reduz o custo de manter um fork e atende ao caráter experimental.
@@ -408,7 +408,7 @@ idempotente pelo setup.
 
 ### M2 — validação (3–5 dias úteis)
 
-Benchmark, E2E, rollback e relatório comparando OpenRouterAI com OpenHands.
+Benchmark, E2E, rollback e relatório comparando Achilles com OpenHands.
 
 ## 10. Critério de encerramento do experimento
 

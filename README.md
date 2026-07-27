@@ -7,7 +7,7 @@ Instalador idempotente do OmniRoute para dois cenários:
 - `local`: OmniRoute como tarefa agendada em background e OpenCode configurado
   exclusivamente para o gateway local.
 
-Nos dois modos, o setup também instala o **OpenRouterAI**, uma IDE desktop
+Nos dois modos, o setup também instala o **Achilles**, uma IDE desktop
 experimental baseada no Eclipse Theia. Ela trabalha diretamente na pasta local
 de projetos e expõe somente os três combos do OmniRoute.
 
@@ -46,9 +46,9 @@ Parâmetros úteis:
 - `-ProjectsPath "D:\projetos"` para escolher a raiz dos projetos
 - `-Port 20128`
 - `-SkipDesktopApp` para instalar somente o gateway
-- `-SkipOpenRouterAI` para manter os clientes antigos sem instalar a nova IDE
-- `-OpenRouterAIVersion <semver|latest>`
-- `-OpenRouterAIArtifactPath <zip>` para validar um build local sem GitHub
+- `-SkipAchilles` para manter os clientes antigos sem instalar a nova IDE
+- `-AchillesVersion <semver|latest>`
+- `-AchillesArtifactPath <zip>` para validar um build local sem GitHub
 - `-NonInteractive` para CI/provisionamento
 
 A autenticação OAuth dos provedores continua dependendo do consentimento no
@@ -109,16 +109,26 @@ compilar um módulo nativo. Quando os binários pré-compilados funcionam, esse
 toolchain pesado não é instalado. Nenhuma ferramenta de build entra nas imagens
 de runtime.
 
-## OpenRouterAI
+## Achilles
 
-O OpenRouterAI é instalado nos modos container e local em escopo de usuário,
+O Achilles é instalado nos modos container e local em escopo de usuário,
 sem UAC. O setup baixa o release privado com GitHub CLI, valida o SHA-256 e
-extrai versões lado a lado em `%LOCALAPPDATA%\Programs\OpenRouterAI`.
+extrai versões lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
 
 Projetos permanecem em `%USERPROFILE%\workspace` (ou `-ProjectsPath`) e a
-configuração fica em `%USERPROFILE%\.openrouterai`. A AppKey não é duplicada no
+configuração fica em `%USERPROFILE%\.achilles`. A AppKey não é duplicada no
 JSON: o processo lê `OMNIROUTE_API_KEY` do ambiente do usuário. O setup é a
 única autoridade de atualização e ativa versões por `current.json`.
+
+Ao detectar OpenRouterAI, o setup copia conversas, preferências e demais
+arquivos de `%USERPROFILE%\.openrouterai` para `%USERPROFILE%\.achilles`.
+Arquivos já existentes no estado novo não são sobrescritos, e a origem
+permanece intacta para rollback. Os atalhos antigos só são removidos depois da
+criação bem-sucedida dos atalhos Achilles.
+
+O catálogo de IA não é congelado no instalador. Achilles consulta `/v1/models`
+do OmniRoute e permite escolher dinamicamente os combos e modelos expostos pelo
+gateway, sem alterar `combos-config.json`.
 
 ## Operação
 

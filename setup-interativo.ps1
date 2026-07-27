@@ -7,12 +7,16 @@ param(
     [Alias("WorkspacePath")]
     [string]$ProjectsPath,
     [int]$Port = 20128,
-    [string]$OpenRouterAIRepository = "pmacedo25/OpenRouterAI",
-    [string]$OpenRouterAIVersion = "latest",
-    [string]$OpenRouterAIArtifactPath,
+    [Alias("OpenRouterAIRepository")]
+    [string]$AchillesRepository = "pmacedo25/Achilles",
+    [Alias("OpenRouterAIVersion")]
+    [string]$AchillesVersion = "latest",
+    [Alias("OpenRouterAIArtifactPath")]
+    [string]$AchillesArtifactPath,
     [switch]$NonInteractive,
     [switch]$SkipDesktopApp,
-    [switch]$SkipOpenRouterAI,
+    [Alias("SkipOpenRouterAI")]
+    [switch]$SkipAchilles,
     [switch]$SkipProviderLogin
 )
 
@@ -20,7 +24,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot "scripts\OmniRoute.Setup.psm1") -Force -DisableNameChecking
-Import-Module (Join-Path $PSScriptRoot "scripts\OpenRouterAI.Setup.psm1") -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "scripts\Achilles.Setup.psm1") -Force -DisableNameChecking
 
 if ([string]::IsNullOrWhiteSpace($Mode)) {
     if ($NonInteractive) {
@@ -69,12 +73,12 @@ $setupOptions = @{
     SkillsBranch      = $SkillsBranch
     ProjectsPath      = $ProjectsPath
     Port              = $Port
-    OpenRouterAIRepository = $OpenRouterAIRepository
-    OpenRouterAIVersion = $OpenRouterAIVersion
-    OpenRouterAIArtifactPath = $OpenRouterAIArtifactPath
+    AchillesRepository = $AchillesRepository
+    AchillesVersion = $AchillesVersion
+    AchillesArtifactPath = $AchillesArtifactPath
     NonInteractive    = $NonInteractive.IsPresent
     SkipDesktopApp    = $SkipDesktopApp.IsPresent
-    SkipOpenRouterAI  = $SkipOpenRouterAI.IsPresent
+    SkipAchilles  = $SkipAchilles.IsPresent
     SkipProviderLogin = $SkipProviderLogin.IsPresent
 }
 

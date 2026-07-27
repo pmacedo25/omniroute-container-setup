@@ -2,13 +2,13 @@
 
 ## Resumo
 
-Os módulos desta pasta provisionam OmniRoute, clientes locais e OpenRouterAI.
-OpenRouterAI é sempre um processo desktop no host, independentemente do gateway
+Os módulos desta pasta provisionam OmniRoute, clientes locais e Achilles.
+Achilles é sempre um processo desktop no host, independentemente do gateway
 rodar localmente ou em contêiner.
 
 ## Leitura rápida para agentes
 
-- Comece por: `OpenRouterAI.Setup.psm1` para instalação da IDE.
+- Comece por: `Achilles.Setup.psm1` para instalação da IDE.
 - Orquestração geral: `OmniRoute.Setup.psm1`.
 - Evite alterar: persistência do OpenHands ao trabalhar somente na IDE.
 - Não abra normalmente: imagens e arquivos Docker quando a mudança for local.
@@ -16,12 +16,13 @@ rodar localmente ou em contêiner.
 
 ## Responsabilidades
 
-### `OpenRouterAI.Setup.psm1`
+### `Achilles.Setup.psm1`
 
 - Baixar release privado ou consumir ZIP local.
 - Validar arquitetura, SemVer e SHA-256.
-- Instalar lado a lado em `%LOCALAPPDATA%\Programs\OpenRouterAI`.
-- Gravar configuração sem segredo em `%USERPROFILE%\.openrouterai`.
+- Instalar lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
+- Gravar configuração sem segredo em `%USERPROFILE%\.achilles`.
+- Copiar de forma aditiva o estado legado em `%USERPROFILE%\.openrouterai`.
 - Ativar versão atomicamente e criar atalhos por usuário.
 
 Não pertence aqui:
@@ -39,9 +40,11 @@ Não pertence aqui:
 ## Contratos
 
 - Segredo: variável de usuário `OMNIROUTE_API_KEY`.
-- Configuração da IDE: `%USERPROFILE%\.openrouterai\config.json`.
-- Executável: exatamente um `OpenRouterAI.exe` no artefato.
-- Artefato: `OpenRouterAI-win-x64-<semver>.zip`.
+- Configuração da IDE: `%USERPROFILE%\.achilles\config.json`.
+- Catálogo: `GET http://127.0.0.1:<porta>/v1/models`, sem allowlist mantida pelo
+  instalador.
+- Executável: exatamente um `Achilles.exe` no artefato.
+- Artefato: `Achilles-win-x64-<semver>.zip`.
 - Workspace padrão: `%USERPROFILE%\workspace`.
 
 ## Abusos que devem falhar
@@ -51,6 +54,7 @@ Não pertence aqui:
 - Arquitetura diferente de x64 bloqueia instalação.
 - Launcher recusa executável fora da raiz gerenciada.
 - Configuração não recebe a AppKey.
+- Migração não remove o estado legado nem sobrescreve o estado novo.
 
 ## Testes
 
@@ -61,4 +65,4 @@ Não pertence aqui:
 ## Limites de crescimento
 
 Se download, ativação e atalhos ultrapassarem uma responsabilidade legível,
-separe-os em módulos próprios em vez de aumentar `OpenRouterAI.Setup.psm1`.
+separe-os em módulos próprios em vez de aumentar `Achilles.Setup.psm1`.

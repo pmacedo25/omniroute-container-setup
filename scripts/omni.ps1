@@ -12,9 +12,9 @@ switch ($Action) {
     }
     "dashboard" { Start-Process "http://localhost:20128/dashboard" }
     "ide" {
-        $launcher = Join-Path $env:USERPROFILE ".openrouterai\OpenRouterAI.ps1"
+        $launcher = Join-Path $env:USERPROFILE ".achilles\Achilles.ps1"
         if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
-            throw "OpenRouterAI não está instalado. Reexecute o setup sem -SkipOpenRouterAI."
+            throw "Achilles não está instalado. Reexecute o setup sem -SkipAchilles."
         }
         & $launcher
     }
@@ -33,12 +33,12 @@ switch ($Action) {
     "doctor" {
         if ($mode -eq "container") { & $engine exec omniroute node healthcheck.mjs }
         else { & omniroute doctor --json }
-        $current = Join-Path $env:USERPROFILE ".openrouterai\current.json"
+        $current = Join-Path $env:USERPROFILE ".achilles\current.json"
         if (Test-Path -LiteralPath $current -PathType Leaf) {
             $ide = Get-Content -LiteralPath $current -Raw | ConvertFrom-Json
-            Write-Host "OpenRouterAI $($ide.version): $($ide.executable)"
+            Write-Host "Achilles $($ide.version): $($ide.executable)"
         } else {
-            Write-Warning "OpenRouterAI ainda não foi instalado."
+            Write-Warning "Achilles ainda não foi instalado."
         }
     }
 }

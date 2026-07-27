@@ -1,10 +1,13 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$script:OpenRouterAIConfigSchemaVersion = 1
-$script:OpenRouterAIDefaultRepository = "pmacedo25/OpenRouterAI"
+$script:AchillesConfigSchemaVersion = 2
+$script:AchillesDefaultRepository = "pmacedo25/Achilles"
+$script:AchillesLegacyStateDirectoryName = ".openrouterai"
+$script:AchillesStateDirectoryName = ".achilles"
+$script:AchillesLegacyProductName = "OpenRouterAI"
 
-function Write-OpenRouterAIMessage {
+function Write-AchillesMessage {
     param([string]$Message, [ValidateSet("INFO", "OK", "WARN")][string]$Level = "INFO")
     $color = switch ($Level) {
         "OK" { "Green" }
@@ -14,30 +17,30 @@ function Write-OpenRouterAIMessage {
     Write-Host "[$Level] $Message" -ForegroundColor $color
 }
 
-function Get-OpenRouterAIArchitecture {
+function Get-AchillesArchitecture {
     $architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
     if ($architecture -ne "x64") {
-        throw "O protótipo OpenRouterAI suporta somente Windows x64; arquitetura detectada: $architecture."
+        throw "O protótipo Achilles suporta somente Windows x64; arquitetura detectada: $architecture."
     }
     return $architecture
 }
 
-function Write-OpenRouterAIConfiguration {
+function Write-AchillesConfiguration {
     param(
         [string]$HomeDirectory,
         [string]$ProjectsDirectory,
         [int]$OmniRoutePort
     )
-    $stateDirectory = Join-Path $HomeDirectory ".openrouterai"
+    $stateDirectory = Join-Path $HomeDirectory $script:AchillesStateDirectoryName
     New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
     $configuration = [ordered]@{
-        schemaVersion = $script:OpenRouterAIConfigSchemaVersion
+        schemaVersion = $script:AchillesConfigSchemaVersion
         omnirouteBaseUrl = "http://127.0.0.1:$OmniRoutePort/v1"
         omnirouteHealthUrl = "http://127.0.0.1:$OmniRoutePort/api/monitoring/health"
+        omnirouteCatalogUrl = "http://127.0.0.1:$OmniRoutePort/v1/models"
         apiKeyEnvironmentVariable = "OMNIROUTE_API_KEY"
         workspace = $ProjectsDirectory
-        defaultCombo = "combo-coding"
-        allowedCombos = @("combo-testing", "combo-coding", "combo-refining")
+        modelSelection = "dynamic"
         telemetry = $false
     }
     $configPath = Join-Path $stateDirectory "config.json"
@@ -47,7 +50,37 @@ function Write-OpenRouterAIConfiguration {
     return $configPath
 }
 
-function Get-OpenRouterAIRelease {
+function Copy-AchillesLegacyState {
+    [CmdletBinding()]
+    param([string]$HomeDirectory)
+
+    $legacyStateDirectory = Join-Path $HomeDirectory $script:AchillesLegacyStateDirectoryName
+    $stateDirectory = Join-Path $HomeDirectory $script:AchillesStateDirectoryName
+    if (-not (Test-Path -LiteralPath $legacyStateDirectory -PathType Container)) {
+        return $false
+    }
+
+    New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
+    Get-ChildItem -LiteralPath $legacyStateDirectory -Force | ForEach-Object {
+        $destination = Join-Path $stateDirectory $_.Name
+        if (-not (Test-Path -LiteralPath $destination)) {
+            Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
+        }
+    }
+
+    $migrationPath = Join-Path $stateDirectory "migration.json"
+    if (-not (Test-Path -LiteralPath $migrationPath -PathType Leaf)) {
+        [ordered]@{
+            source = $legacyStateDirectory
+            migratedAt = [DateTime]::UtcNow.ToString("o")
+            legacyStatePreserved = $true
+        } | ConvertTo-Json | Set-Content -LiteralPath "$migrationPath.new" -Encoding utf8
+        Move-Item -LiteralPath "$migrationPath.new" -Destination $migrationPath
+    }
+    return $true
+}
+
+function Get-AchillesRelease {
     param(
         [string]$Repository,
         [string]$Version,
@@ -55,7 +88,7 @@ function Get-OpenRouterAIRelease {
     )
     $gh = Get-Command gh -ErrorAction SilentlyContinue
     if (-not $gh) {
-        throw "GitHub CLI é necessário para baixar o release privado do OpenRouterAI."
+        throw "GitHub CLI é necessário para baixar o release privado do Achilles."
     }
     & $gh.Source auth status *> $null
     if ($LASTEXITCODE -ne 0) {
@@ -64,7 +97,7 @@ function Get-OpenRouterAIRelease {
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
     $arguments = @(
         "release", "download", "--repo", $Repository,
-        "--pattern", "OpenRouterAI-win-x64-*.zip",
+        "--pattern", "Achilles-win-x64-*.zip",
         "--pattern", "release-manifest.json",
         "--pattern", "SHA256SUMS",
         "--dir", $Destination,
@@ -77,17 +110,17 @@ function Get-OpenRouterAIRelease {
     if ($LASTEXITCODE -ne 0) {
         throw "Falha ao baixar o release '$Version' de '$Repository'."
     }
-    $artifacts = @(Get-ChildItem -LiteralPath $Destination -Filter "OpenRouterAI-win-x64-*.zip" -File)
+    $artifacts = @(Get-ChildItem -LiteralPath $Destination -Filter "Achilles-win-x64-*.zip" -File)
     if ($artifacts.Count -ne 1) {
-        throw "O release deve conter exatamente um artefato OpenRouterAI-win-x64-*.zip."
+        throw "O release deve conter exatamente um artefato Achilles-win-x64-*.zip."
     }
     return $artifacts[0].FullName
 }
 
-function Test-OpenRouterAIArtifact {
+function Test-AchillesArtifact {
     param([string]$ArtifactPath, [string]$Sha256SumsPath)
     if (-not (Test-Path -LiteralPath $ArtifactPath -PathType Leaf)) {
-        throw "Artefato OpenRouterAI não encontrado: $ArtifactPath"
+        throw "Artefato Achilles não encontrado: $ArtifactPath"
     }
     $actualHash = (Get-FileHash -LiteralPath $ArtifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
     if (-not [string]::IsNullOrWhiteSpace($Sha256SumsPath) -and
@@ -107,7 +140,7 @@ function Test-OpenRouterAIArtifact {
     return $actualHash
 }
 
-function Get-OpenRouterAIVersion {
+function Get-AchillesVersion {
     param([string]$ArtifactPath, [string]$ManifestPath)
     if (-not [string]::IsNullOrWhiteSpace($ManifestPath) -and
         (Test-Path -LiteralPath $ManifestPath -PathType Leaf)) {
@@ -117,20 +150,20 @@ function Get-OpenRouterAIVersion {
         }
     }
     $name = Split-Path -Leaf $ArtifactPath
-    if ($name -match "OpenRouterAI-win-x64-(?<version>\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?)\.zip") {
+    if ($name -match "Achilles-win-x64-(?<version>\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?)\.zip") {
         return $Matches.version
     }
     throw "Não foi possível determinar a versão SemVer do artefato '$name'."
 }
 
-function New-OpenRouterAILauncher {
+function New-AchillesLauncher {
     param(
         [string]$HomeDirectory,
         [string]$InstallRoot,
         [string]$ProjectsDirectory
     )
-    $stateDirectory = Join-Path $HomeDirectory ".openrouterai"
-    $launcherPath = Join-Path $stateDirectory "OpenRouterAI.ps1"
+    $stateDirectory = Join-Path $HomeDirectory ".achilles"
+    $launcherPath = Join-Path $stateDirectory "Achilles.ps1"
     $launcher = @"
 `$ErrorActionPreference = "Stop"
 `$stateDirectory = "$stateDirectory"
@@ -138,12 +171,12 @@ function New-OpenRouterAILauncher {
 `$executable = [IO.Path]::GetFullPath(`$current.executable)
 `$allowedRoot = [IO.Path]::GetFullPath("$InstallRoot").TrimEnd("\") + "\"
 if (-not `$executable.StartsWith(`$allowedRoot, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "OpenRouterAI executable outside the managed install directory."
+    throw "Achilles executable outside the managed install directory."
 }
 if (-not (Test-Path -LiteralPath `$executable -PathType Leaf)) {
-    throw "OpenRouterAI executable not found. Re-run the OmniRoute installer."
+    throw "Achilles executable not found. Re-run the OmniRoute installer."
 }
-`$env:OPENROUTERAI_CONFIG = Join-Path `$stateDirectory "config.json"
+`$env:ACHILLES_CONFIG = Join-Path `$stateDirectory "config.json"
 `$env:OPENAI_API_KEY = `$env:OMNIROUTE_API_KEY
 Start-Process -FilePath `$executable -ArgumentList @("$ProjectsDirectory")
 "@
@@ -151,7 +184,7 @@ Start-Process -FilePath `$executable -ArgumentList @("$ProjectsDirectory")
     return $launcherPath
 }
 
-function New-OpenRouterAIShortcuts {
+function New-AchillesShortcuts {
     param(
         [string]$LauncherPath,
         [string]$IconPath,
@@ -163,8 +196,8 @@ function New-OpenRouterAIShortcuts {
     $powerShellPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
     $shell = New-Object -ComObject WScript.Shell
     foreach ($shortcutPath in @(
-        (Join-Path $desktopDirectory "OpenRouterAI.lnk"),
-        (Join-Path $startMenuDirectory "OpenRouterAI.lnk")
+        (Join-Path $desktopDirectory "Achilles.lnk"),
+        (Join-Path $startMenuDirectory "Achilles.lnk")
     )) {
         $shortcut = $shell.CreateShortcut($shortcutPath)
         $shortcut.TargetPath = $powerShellPath
@@ -172,30 +205,38 @@ function New-OpenRouterAIShortcuts {
         $shortcut.WorkingDirectory = $WorkingDirectory
         $shortcut.WindowStyle = 1
         $shortcut.IconLocation = "$IconPath,0"
-        $shortcut.Description = "OpenRouterAI via OmniRoute"
+        $shortcut.Description = "Achilles via OmniRoute"
         $shortcut.Save()
+    }
+
+    foreach ($legacyShortcutPath in @(
+        (Join-Path $desktopDirectory "$($script:AchillesLegacyProductName).lnk"),
+        (Join-Path $startMenuDirectory "$($script:AchillesLegacyProductName).lnk")
+    )) {
+        Remove-Item -LiteralPath $legacyShortcutPath -Force -ErrorAction SilentlyContinue
     }
 }
 
-function Install-OpenRouterAI {
+function Install-Achilles {
     [CmdletBinding()]
     param(
         [string]$HomeDirectory,
         [string]$ProjectsDirectory,
         [int]$OmniRoutePort,
-        [string]$Repository = $script:OpenRouterAIDefaultRepository,
+        [string]$Repository = $script:AchillesDefaultRepository,
         [string]$Version = "latest",
         [AllowEmptyString()][string]$ArtifactPath,
         [string]$FallbackIconPath
     )
-    [void](Get-OpenRouterAIArchitecture)
-    $stateDirectory = Join-Path $HomeDirectory ".openrouterai"
-    $installRoot = Join-Path $env:LOCALAPPDATA "Programs\OpenRouterAI"
+    [void](Get-AchillesArchitecture)
+    $legacyStateMigrated = Copy-AchillesLegacyState -HomeDirectory $HomeDirectory
+    $stateDirectory = Join-Path $HomeDirectory $script:AchillesStateDirectoryName
+    $installRoot = Join-Path $env:LOCALAPPDATA "Programs\Achilles"
     $downloadDirectory = Join-Path $stateDirectory "downloads"
     New-Item -ItemType Directory -Path $stateDirectory, $installRoot, $downloadDirectory -Force | Out-Null
 
     if ([string]::IsNullOrWhiteSpace($ArtifactPath)) {
-        $ArtifactPath = Get-OpenRouterAIRelease -Repository $Repository -Version $Version `
+        $ArtifactPath = Get-AchillesRelease -Repository $Repository -Version $Version `
             -Destination $downloadDirectory
     } else {
         $ArtifactPath = [IO.Path]::GetFullPath(
@@ -205,13 +246,13 @@ function Install-OpenRouterAI {
     $artifactDirectory = Split-Path -Parent $ArtifactPath
     $sumsPath = Join-Path $artifactDirectory "SHA256SUMS"
     $manifestPath = Join-Path $artifactDirectory "release-manifest.json"
-    [void](Test-OpenRouterAIArtifact -ArtifactPath $ArtifactPath -Sha256SumsPath $sumsPath)
-    $resolvedVersion = Get-OpenRouterAIVersion -ArtifactPath $ArtifactPath -ManifestPath $manifestPath
+    [void](Test-AchillesArtifact -ArtifactPath $ArtifactPath -Sha256SumsPath $sumsPath)
+    $resolvedVersion = Get-AchillesVersion -ArtifactPath $ArtifactPath -ManifestPath $manifestPath
     $versionDirectory = Join-Path $installRoot $resolvedVersion
     $stagingDirectory = Join-Path $installRoot ".staging-$resolvedVersion"
 
     $installedExecutables = @(if (Test-Path -LiteralPath $versionDirectory) {
-        @(Get-ChildItem -LiteralPath $versionDirectory -Recurse -Filter "OpenRouterAI.exe" -File)
+        @(Get-ChildItem -LiteralPath $versionDirectory -Recurse -Filter "Achilles.exe" -File)
     } else {
         @()
     })
@@ -223,10 +264,10 @@ function Install-OpenRouterAI {
         }
         New-Item -ItemType Directory -Path $stagingDirectory | Out-Null
         Expand-Archive -LiteralPath $ArtifactPath -DestinationPath $stagingDirectory -Force
-        $executables = @(Get-ChildItem -LiteralPath $stagingDirectory -Recurse -Filter "OpenRouterAI.exe" -File)
+        $executables = @(Get-ChildItem -LiteralPath $stagingDirectory -Recurse -Filter "Achilles.exe" -File)
         if ($executables.Count -ne 1) {
             Remove-Item -LiteralPath $stagingDirectory -Recurse -Force
-            throw "O artefato deve conter exatamente um OpenRouterAI.exe."
+            throw "O artefato deve conter exatamente um Achilles.exe."
         }
         if (Test-Path -LiteralPath $versionDirectory) {
             Remove-Item -LiteralPath $versionDirectory -Recurse -Force
@@ -236,7 +277,7 @@ function Install-OpenRouterAI {
         $executablePath = Join-Path $versionDirectory $relativeExecutable
     }
 
-    $configPath = Write-OpenRouterAIConfiguration -HomeDirectory $HomeDirectory `
+    $configPath = Write-AchillesConfiguration -HomeDirectory $HomeDirectory `
         -ProjectsDirectory $ProjectsDirectory -OmniRoutePort $OmniRoutePort
     $currentPath = Join-Path $stateDirectory "current.json"
     $currentTemporaryPath = "$currentPath.new"
@@ -248,18 +289,21 @@ function Install-OpenRouterAI {
     } | ConvertTo-Json | Set-Content -LiteralPath $currentTemporaryPath -Encoding utf8
     Move-Item -LiteralPath $currentTemporaryPath -Destination $currentPath -Force
 
-    $iconPath = Join-Path $stateDirectory "OpenRouterAI.ico"
+    $iconPath = Join-Path $stateDirectory "Achilles.ico"
     if (Test-Path -LiteralPath $FallbackIconPath -PathType Leaf) {
         Copy-Item -LiteralPath $FallbackIconPath -Destination $iconPath -Force
     } else {
         $iconPath = $executablePath
     }
-    $launcherPath = New-OpenRouterAILauncher -HomeDirectory $HomeDirectory `
+    $launcherPath = New-AchillesLauncher -HomeDirectory $HomeDirectory `
         -InstallRoot $installRoot -ProjectsDirectory $ProjectsDirectory
-    New-OpenRouterAIShortcuts -LauncherPath $launcherPath -IconPath $iconPath `
+    New-AchillesShortcuts -LauncherPath $launcherPath -IconPath $iconPath `
         -WorkingDirectory $ProjectsDirectory
-    Write-OpenRouterAIMessage "OpenRouterAI $resolvedVersion instalado sem elevação." "OK"
-    Write-OpenRouterAIMessage "Na primeira abertura, confirme a confiança no workspace para habilitar agentes, tarefas e ferramentas." "INFO"
+    Write-AchillesMessage "Achilles $resolvedVersion instalado sem elevação." "OK"
+    if ($legacyStateMigrated) {
+        Write-AchillesMessage "Configurações do OpenRouterAI foram copiadas; o estado original foi preservado para rollback." "OK"
+    }
+    Write-AchillesMessage "Na primeira abertura, confirme a confiança no workspace para habilitar agentes, tarefas e ferramentas." "INFO"
     return [pscustomobject]@{
         Version = $resolvedVersion
         Executable = $executablePath
@@ -268,4 +312,4 @@ function Install-OpenRouterAI {
     }
 }
 
-Export-ModuleMember -Function Write-OpenRouterAIConfiguration, Test-OpenRouterAIArtifact, Get-OpenRouterAIVersion, Install-OpenRouterAI
+Export-ModuleMember -Function Write-AchillesConfiguration, Copy-AchillesLegacyState, Test-AchillesArtifact, Get-AchillesVersion, Install-Achilles

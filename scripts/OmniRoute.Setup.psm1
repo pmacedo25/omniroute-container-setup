@@ -1,5 +1,5 @@
 Set-StrictMode -Version Latest
-Import-Module (Join-Path $PSScriptRoot "OpenRouterAI.Setup.psm1") -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "Achilles.Setup.psm1") -Force -DisableNameChecking
 
 function Add-KnownToolPaths {
     $paths = @(
@@ -803,12 +803,12 @@ function Invoke-OmniRouteSetup {
         [string]$SkillsBranch,
         [string]$ProjectsPath,
         [int]$Port,
-        [string]$OpenRouterAIRepository,
-        [string]$OpenRouterAIVersion,
-        [AllowEmptyString()][string]$OpenRouterAIArtifactPath,
+        [string]$AchillesRepository,
+        [string]$AchillesVersion,
+        [AllowEmptyString()][string]$AchillesArtifactPath,
         [bool]$NonInteractive,
         [bool]$SkipDesktopApp,
-        [bool]$SkipOpenRouterAI,
+        [bool]$SkipAchilles,
         [bool]$SkipProviderLogin
     )
     $homeDirectory = $env:USERPROFILE
@@ -820,8 +820,8 @@ function Invoke-OmniRouteSetup {
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_REPO" $SkillsRepository
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_BRANCH" $SkillsBranch
     $needsGitHubAuthentication = $Mode -eq "container" -or
-        (-not $SkipDesktopApp -and -not $SkipOpenRouterAI -and
-            [string]::IsNullOrWhiteSpace($OpenRouterAIArtifactPath))
+        (-not $SkipDesktopApp -and -not $SkipAchilles -and
+            [string]::IsNullOrWhiteSpace($AchillesArtifactPath))
     $gitHubToken = if ($needsGitHubAuthentication) {
         Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive
     } else {
@@ -863,13 +863,13 @@ function Invoke-OmniRouteSetup {
     Set-TokenEfficiencyDefaults -BaseUrl $baseUrl -AppKey $appKey
     Set-DefaultCombos -BaseUrl $baseUrl -ConfigPath (Join-Path $SetupDirectory "combos-config.json") -AppKey $appKey
 
-    if (-not $SkipDesktopApp -and -not $SkipOpenRouterAI) {
-        Install-OpenRouterAI -HomeDirectory $homeDirectory `
+    if (-not $SkipDesktopApp -and -not $SkipAchilles) {
+        Install-Achilles -HomeDirectory $homeDirectory `
             -ProjectsDirectory $projectsDirectory -OmniRoutePort $Port `
-            -Repository $OpenRouterAIRepository -Version $OpenRouterAIVersion `
-            -ArtifactPath $OpenRouterAIArtifactPath `
-            -FallbackIconPath (Join-Path $SetupDirectory "design\openrouterai\openrouterai.ico") | Out-Null
-        Write-SetupMessage "Abra o OpenRouterAI pelo ícone da Área de Trabalho ou Menu Iniciar." "OK"
+            -Repository $AchillesRepository -Version $AchillesVersion `
+            -ArtifactPath $AchillesArtifactPath `
+            -FallbackIconPath (Join-Path $SetupDirectory "design\achilles\achilles.ico") | Out-Null
+        Write-SetupMessage "Abra o Achilles pelo ícone da Área de Trabalho ou Menu Iniciar." "OK"
     }
 
     if ($Mode -eq "container" -and -not $SkipDesktopApp) {
