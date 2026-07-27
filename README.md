@@ -15,6 +15,17 @@ processo Node genérico ou banco existente é apagado.
 
 ## Execução
 
+Instalação direta pelo GitHub, sem clonar o repositório e sem precisar de Git:
+
+```powershell
+irm https://raw.githubusercontent.com/pmacedo25/omniroute-container-setup/master/install.ps1 | iex
+```
+
+O bootstrap consulta o release público mais recente, baixa o código-fonte
+diretamente do GitHub e mantém a cópia operacional em
+`%USERPROFILE%\.omniroute\setup`. O `.env` existente é preservado nas
+atualizações, portanto o mesmo comando pode ser reexecutado com segurança.
+
 Modo assistido:
 
 ```powershell

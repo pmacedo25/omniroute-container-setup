@@ -107,6 +107,7 @@ try {
     Assert-True $checksumRejected "Checksum adulterado deve ser rejeitado"
 
     $setupSource = Get-Content (Join-Path $projectDirectory "setup-interativo.ps1") -Raw
+    $bootstrapSource = Get-Content (Join-Path $projectDirectory "install.ps1") -Raw
     $envExampleSource = Get-Content (Join-Path $projectDirectory ".env.example") -Raw
     $moduleSource = Get-Content (Join-Path $projectDirectory "scripts\OmniRoute.Setup.psm1") -Raw
     $achillesModuleSource = Get-Content (Join-Path $projectDirectory "scripts\Achilles.Setup.psm1") -Raw
@@ -118,6 +119,11 @@ try {
     Assert-True ($setupSource -match 'SkillsRepository é obrigatório no modo não interativo') "Modo automático deve exigir o repositório de skills"
     Assert-True ($setupSource -match 'do \{[\s\S]+Read-Host "URL"[\s\S]+\} while') "Modo assistido deve repetir a pergunta até receber uma URL"
     Assert-True ($setupSource -notmatch 'defaultSkillsRepository') "Setup não deve manter repositório padrão de skills"
+    Assert-True ($bootstrapSource -match 'releases/latest') "Bootstrap deve instalar um release estável"
+    Assert-True ($bootstrapSource -match '"\.omniroute"') "Bootstrap deve usar o estado persistente do OmniRoute"
+    Assert-True ($bootstrapSource -match '\$installDirectory.+Join-Path \$stateDirectory "setup"') "Bootstrap deve persistir os arquivos para reexecução"
+    Assert-True ($bootstrapSource -match '\$_.Name -ne "\.env"') "Bootstrap deve preservar o ambiente existente"
+    Assert-True ($bootstrapSource -match 'ExecutionPolicy Bypass') "Bootstrap deve funcionar sem alterar a policy do usuário"
     Assert-True ($envExampleSource -match '(?m)^OMNIROUTE_SKILLS_REPO=\s*$') "Exemplo de ambiente não deve sugerir repositório de skills"
     Assert-True ($setupSource -notmatch 'ProjectsPath|WorkspacePath') "Setup não deve solicitar uma pasta de projetos"
     Assert-True ($moduleSource -notmatch 'Set-EnvValue.+PROJECTS_DIR') "Setup não deve criar uma raiz artificial de projetos"
