@@ -208,10 +208,20 @@ if (-not (Test-Path -LiteralPath `$executable -PathType Leaf)) {
 }
 `$env:ACHILLES_CONFIG = Join-Path `$stateDirectory "config.json"
 `$env:OPENAI_API_KEY = `$env:OMNIROUTE_API_KEY
-if (@(`$WorkspaceArguments).Count -gt 0) {
-    Start-Process -FilePath `$executable -ArgumentList @(`$WorkspaceArguments)
-} else {
-    Start-Process -FilePath `$executable
+`$arguments = @(`$WorkspaceArguments | Where-Object {
+    -not [string]::IsNullOrWhiteSpace(`$_)
+})
+try {
+    if (`$arguments.Count -gt 0) {
+        Start-Process -FilePath `$executable -ArgumentList `$arguments -ErrorAction Stop
+    } else {
+        Start-Process -FilePath `$executable -ErrorAction Stop
+    }
+} catch {
+    `$errorRecord = "`${([DateTime]::Now.ToString('s'))} `$(`$_.Exception.Message)"
+    Set-Content -LiteralPath (Join-Path `$stateDirectory "launcher-error.log") `
+        -Value `$errorRecord -Encoding utf8
+    throw
 }
 "@
     Set-Content -LiteralPath $launcherPath -Value $launcher -Encoding utf8
