@@ -13,18 +13,36 @@ de projetos e consulta dinamicamente os combos e modelos do OmniRoute.
 O instalador preserva o banco, a APPKEY e as skills em reexecuções. Nenhum
 processo Node genérico ou banco existente é apagado.
 
-## Execução
+## Instalação recomendada
 
-Instalação direta pelo GitHub, sem clonar o repositório e sem precisar de Git:
+Abra o **PowerShell** como usuário normal e execute:
 
 ```powershell
 irm https://raw.githubusercontent.com/pmacedo25/omniroute-container-setup/master/install.ps1 | iex
 ```
 
-O bootstrap consulta o release público mais recente, baixa o código-fonte
-diretamente do GitHub e mantém a cópia operacional em
-`%USERPROFILE%\.omniroute\setup`. O `.env` existente é preservado nas
-atualizações, portanto o mesmo comando pode ser reexecutado com segurança.
+Esse é o fluxo recomendado para primeira instalação e atualização. Não é
+necessário clonar o repositório, instalar Git previamente ou abrir o terminal
+como administrador. O comando usa somente endpoints públicos do GitHub:
+
+1. baixa o bootstrap por `raw.githubusercontent.com`;
+2. consulta o release estável mais recente pela API pública;
+3. baixa e valida a estrutura do pacote de código-fonte;
+4. mantém a cópia operacional em `%USERPROFILE%\.omniroute\setup`;
+5. inicia o instalador assistido.
+
+O `.env` existente é preservado nas atualizações. Portanto, o mesmo comando
+pode ser reexecutado depois de uma falha ou para buscar uma versão nova sem
+perder AppKey e configurações já criadas.
+
+Durante o fluxo serão solicitados o modo de execução (`container` ou `local`) e
+a URL obrigatória do repositório de skills. Os logins OAuth que exigem
+consentimento continuam sendo abertos pelo próprio instalador.
+
+## Execução a partir do código-fonte
+
+Os comandos abaixo são voltados ao desenvolvimento do instalador ou a cenários
+em que o repositório já está disponível localmente.
 
 Modo assistido:
 
