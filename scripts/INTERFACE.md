@@ -22,7 +22,8 @@ rodar localmente ou em contêiner.
 - Validar arquitetura, SemVer e SHA-256.
 - Instalar lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
 - Gravar configuração sem segredo em `%USERPROFILE%\.achilles`.
-- Copiar de forma aditiva o estado legado em `%USERPROFILE%\.openrouterai`.
+- Copiar de forma aditiva o estado persistente legado em `%USERPROFILE%\.openrouterai`,
+  sem caches, layouts transitórios ou launchers da marca anterior.
 - Ativar versão atomicamente e criar atalhos por usuário.
 
 Não pertence aqui:

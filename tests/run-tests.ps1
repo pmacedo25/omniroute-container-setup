@@ -68,10 +68,15 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $legacyStateDirectory "conversations") -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $legacyStateDirectory "conversations\history.json") -Value '{"preserved":true}' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $legacyStateDirectory "user-preferences.json") -Value '{"theme":"dark"}' -Encoding utf8
+    New-Item -ItemType Directory -Path (Join-Path $legacyStateDirectory "workspace-storage") -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $legacyStateDirectory "workspace-storage\layout.json") -Value '{"title":"OpenRouterAI"}' -Encoding utf8
+    Set-Content -LiteralPath (Join-Path $legacyStateDirectory "OpenRouterAI.ps1") -Value "legacy launcher" -Encoding utf8
     Assert-True (Copy-AchillesLegacyState -HomeDirectory $testRoot) "Estado legado deve ser detectado"
     Assert-True (Test-Path (Join-Path $testRoot ".achilles\conversations\history.json")) "Conversas devem ser copiadas"
     Assert-True (Test-Path (Join-Path $testRoot ".achilles\user-preferences.json")) "Preferências devem ser copiadas"
     Assert-True (Test-Path (Join-Path $legacyStateDirectory "conversations\history.json")) "Estado legado deve permanecer para rollback"
+    Assert-True (-not (Test-Path (Join-Path $testRoot ".achilles\workspace-storage"))) "Layout legado não deve contaminar a marca Achilles"
+    Assert-True (-not (Test-Path (Join-Path $testRoot ".achilles\OpenRouterAI.ps1"))) "Launcher legado não deve ser migrado"
     Set-Content -LiteralPath (Join-Path $testRoot ".achilles\user-preferences.json") -Value '{"theme":"custom"}' -Encoding utf8
     Assert-True (Copy-AchillesLegacyState -HomeDirectory $testRoot) "Migração deve ser reexecutável"
     Assert-True ((Get-Content -LiteralPath (Join-Path $testRoot ".achilles\user-preferences.json") -Raw) -match "custom") "Reexecução não deve sobrescrever estado novo"
@@ -145,7 +150,9 @@ try {
     Assert-True ($achillesModuleSource -match '\$installedExecutables = @\(if') "Reexecução com um executável deve preservar sem erro de Count"
     Assert-True ($achillesModuleSource -match 'Copy-AchillesLegacyState') "Instalador deve migrar o estado legado"
     Assert-True ($achillesModuleSource -match 'legacyStatePreserved = \$true') "Migração deve documentar rollback"
-    Assert-True ($achillesModuleSource -match 'Achilles-win-x64-\*\.zip') "Release deve usar o nome Achilles"
+    Assert-True ($achillesModuleSource -match '\^Achilles-win-x64-') "Release deve selecionar somente artefatos Achilles"
+    Assert-True ($achillesModuleSource -match 'não contém um build Achilles para Windows x64') "Release legado deve produzir erro acionável"
+    Assert-True ($achillesModuleSource -match 'AchillesArtifactPath') "Erro de release deve indicar o fluxo com artefato local"
     Assert-True ($achillesModuleSource -notmatch 'allowedCombos') "Instalador não deve manter lista hardcoded de modelos"
     $omniSource = Get-Content (Join-Path $projectDirectory "scripts\omni.ps1") -Raw
     Assert-True ($omniSource -match '"ide"') "Comando omni deve abrir a IDE"

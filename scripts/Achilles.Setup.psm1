@@ -61,10 +61,27 @@ function Copy-AchillesLegacyState {
     }
 
     New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
+    # Caches, UI layout and old launchers carry serialized product branding and
+    # executable paths. They are safe to regenerate and must not contaminate the
+    # renamed application state.
+    $transientLegacyEntries = @(
+        "globalStorage",
+        "localization-cache",
+        "logs",
+        "plugin-storage",
+        "workspace-metadata",
+        "workspace-storage",
+        "OpenRouterAI.ico",
+        "OpenRouterAI.ps1",
+        "current.json",
+        "downloads"
+    )
     Get-ChildItem -LiteralPath $legacyStateDirectory -Force | ForEach-Object {
-        $destination = Join-Path $stateDirectory $_.Name
-        if (-not (Test-Path -LiteralPath $destination)) {
-            Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
+        if ($_.Name -notin $transientLegacyEntries) {
+            $destination = Join-Path $stateDirectory $_.Name
+            if (-not (Test-Path -LiteralPath $destination)) {
+                Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
+            }
         }
     }
 
@@ -95,9 +112,33 @@ function Get-AchillesRelease {
         throw "GitHub CLI não está autenticado. Execute 'gh auth login --git-protocol https --web' e reexecute."
     }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    $releaseViewArguments = @(
+        "release", "view", "--repo", $Repository,
+        "--json", "tagName,assets"
+    )
+    if (-not [string]::IsNullOrWhiteSpace($Version) -and $Version -ne "latest") {
+        $releaseViewArguments += $Version
+    }
+    $releaseJson = & $gh.Source @releaseViewArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Não foi possível consultar o release '$Version' de '$Repository'."
+    }
+    $release = $releaseJson | ConvertFrom-Json
+    $artifactAssets = @($release.assets | Where-Object {
+        $_.name -match "^Achilles-win-x64-\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?\.zip$"
+    })
+    if ($artifactAssets.Count -eq 0) {
+        $availableNames = @($release.assets | ForEach-Object { $_.name }) -join ", "
+        throw "O release '$($release.tagName)' não contém um build Achilles para Windows x64. Artefatos disponíveis: $availableNames. Publique uma build validada ou informe -AchillesArtifactPath."
+    }
+    if ($artifactAssets.Count -gt 1) {
+        $matchingNames = @($artifactAssets | ForEach-Object { $_.name }) -join ", "
+        throw "O release '$($release.tagName)' contém builds Achilles duplicadas para Windows x64: $matchingNames."
+    }
+    $artifactName = $artifactAssets[0].name
     $arguments = @(
         "release", "download", "--repo", $Repository,
-        "--pattern", "Achilles-win-x64-*.zip",
+        "--pattern", $artifactName,
         "--pattern", "release-manifest.json",
         "--pattern", "SHA256SUMS",
         "--dir", $Destination,
@@ -110,11 +151,11 @@ function Get-AchillesRelease {
     if ($LASTEXITCODE -ne 0) {
         throw "Falha ao baixar o release '$Version' de '$Repository'."
     }
-    $artifacts = @(Get-ChildItem -LiteralPath $Destination -Filter "Achilles-win-x64-*.zip" -File)
-    if ($artifacts.Count -ne 1) {
-        throw "O release deve conter exatamente um artefato Achilles-win-x64-*.zip."
+    $artifactPath = Join-Path $Destination $artifactName
+    if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+        throw "O download terminou sem criar o artefato esperado '$artifactName'."
     }
-    return $artifacts[0].FullName
+    return $artifactPath
 }
 
 function Test-AchillesArtifact {

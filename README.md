@@ -121,7 +121,8 @@ JSON: o processo lê `OMNIROUTE_API_KEY` do ambiente do usuário. O setup é a
 única autoridade de atualização e ativa versões por `current.json`.
 
 Ao detectar OpenRouterAI, o setup copia conversas, preferências e demais
-arquivos de `%USERPROFILE%\.openrouterai` para `%USERPROFILE%\.achilles`.
+configurações persistentes de `%USERPROFILE%\.openrouterai` para `%USERPROFILE%\.achilles`.
+Caches, layouts temporários e launchers com a marca antiga são regenerados.
 Arquivos já existentes no estado novo não são sobrescritos, e a origem
 permanece intacta para rollback. Os atalhos antigos só são removidos depois da
 criação bem-sucedida dos atalhos Achilles.
