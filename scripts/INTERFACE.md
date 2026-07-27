@@ -10,7 +10,7 @@ rodar localmente ou em contêiner.
 
 - Comece por: `Achilles.Setup.psm1` para instalação da IDE.
 - Orquestração geral: `OmniRoute.Setup.psm1`.
-- Evite alterar: persistência do OpenHands ao trabalhar somente na IDE.
+- Evite alterar: persistência do OmniRoute ao trabalhar somente na IDE.
 - Não abra normalmente: imagens e arquivos Docker quando a mudança for local.
 - Validação principal: `.\tests\run-tests.ps1`.
 

@@ -43,6 +43,16 @@ function Set-EnvValue {
     Set-Content -LiteralPath $Path -Value $updated -Encoding utf8
 }
 
+function Remove-EnvValue {
+    param([string]$Path, [string[]]$Names)
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $namePattern = ($Names | ForEach-Object { [regex]::Escape($_) }) -join "|"
+    $updated = @(Get-Content -LiteralPath $Path | Where-Object {
+        $_ -notmatch "^\s*(?:$namePattern)="
+    })
+    Set-Content -LiteralPath $Path -Value $updated -Encoding utf8
+}
+
 function Get-EnvValue {
     param([string]$Path, [string]$Name)
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
@@ -446,83 +456,6 @@ function Set-TokenEfficiencyDefaults {
     }
 }
 
-function Write-OpenCodeConfiguration {
-    param([string]$HomeDirectory, [int]$Port)
-    $configDirectory = Join-Path $HomeDirectory ".config\opencode"
-    New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
-    $configuration = [ordered]@{
-        '$schema' = "https://opencode.ai/config.json"
-        model = "omniroute/combo-coding"
-        small_model = "omniroute/combo-testing"
-        enabled_providers = @("omniroute")
-        provider = [ordered]@{
-            omniroute = [ordered]@{
-                npm = "@ai-sdk/openai-compatible"
-                name = "OmniRoute"
-                options = [ordered]@{
-                    baseURL = "http://localhost:$Port/v1"
-                    apiKey = "{env:OMNIROUTE_API_KEY}"
-                }
-                models = [ordered]@{
-                    "combo-coding" = @{ name = "OmniRoute Coding" }
-                    "combo-refining" = @{ name = "OmniRoute Refining" }
-                    "combo-testing" = @{ name = "OmniRoute Testing" }
-                }
-            }
-        }
-    }
-    $configuration | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $configDirectory "opencode.json") -Encoding utf8
-}
-
-function Install-OpenCode {
-    param([string]$HomeDirectory, [int]$Port)
-    Invoke-External "npm" @("install", "--global", "opencode-ai@1.18.5", "--no-audit", "--no-fund") "Falha ao instalar o OpenCode"
-    Write-OpenCodeConfiguration -HomeDirectory $HomeDirectory -Port $Port
-}
-
-function Set-OpenHandsWebSettings {
-    param(
-        [string]$BaseUrl,
-        [string]$AppKey,
-        [int]$OmniRoutePort
-    )
-    $payload = @{
-        agent_settings_diff = @{
-            llm = @{
-                model = "openai/combo-coding"
-                api_key = $AppKey
-                base_url = "http://host.docker.internal:$OmniRoutePort/v1"
-                num_retries = 1
-                retry_multiplier = 1
-                retry_min_wait = 1
-                retry_max_wait = 4
-                timeout = 120
-                max_input_tokens = 272000
-                max_output_tokens = 16000
-                reasoning_effort = "medium"
-            }
-            condenser = @{
-                type = "conversation_window"
-                max_size = 120
-                keep_first = 4
-            }
-        }
-    } | ConvertTo-Json -Depth 10
-
-    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-    Invoke-RestMethod -Uri "$BaseUrl/api/v1/settings" -Method Post `
-        -ContentType "application/json" -Body $payload -WebSession $session `
-        -TimeoutSec 20 | Out-Null
-    $saved = Invoke-RestMethod -Uri "$BaseUrl/api/v1/settings" `
-        -WebSession $session -TimeoutSec 20
-    if ($saved.agent_settings.llm.model -ne "openai/combo-coding" -or
-        $saved.agent_settings.llm.base_url -ne "http://host.docker.internal:$OmniRoutePort/v1" -or
-        -not $saved.llm_api_key_set) {
-        throw "O OpenHands não confirmou a persistência da configuração OmniRoute."
-    }
-    Write-SetupMessage "Para trocar o combo: OpenHands > Settings (engrenagem) > LLM > Model. A alteração vale para novas conversas; reinicie uma conversa antiga." "INFO"
-}
-
 function Get-PathWithEntry {
     param(
         [AllowNull()]
@@ -552,103 +485,6 @@ function Install-OmniCommand {
     }
 }
 
-function Install-OpenHandsDesktopApp {
-    param(
-        [string]$HomeDirectory,
-        [string]$Engine,
-        [int]$Port = 3000
-    )
-    $binDirectory = Join-Path $HomeDirectory ".omniroute\bin"
-    $assetsDirectory = Join-Path $HomeDirectory ".omniroute\assets"
-    New-Item -ItemType Directory -Path $binDirectory -Force | Out-Null
-    New-Item -ItemType Directory -Path $assetsDirectory -Force | Out-Null
-    $iconPath = Join-Path $assetsDirectory "openhands.ico"
-    try {
-        Invoke-WebRequest -Uri "http://localhost:$Port/favicon.ico" `
-            -OutFile $iconPath -UseBasicParsing -TimeoutSec 15
-    } catch {
-        Write-SetupMessage "Não foi possível obter o ícone do OpenHands: $($_.Exception.Message)" "WARN"
-    }
-    $launcherPath = Join-Path $binDirectory "openhands-desktop.ps1"
-    $launcher = @"
-`$ErrorActionPreference = "SilentlyContinue"
-`$url = "http://localhost:$Port"
-try {
-    Invoke-WebRequest -Uri `$url -UseBasicParsing -TimeoutSec 3 | Out-Null
-} catch {
-    & "$Engine" start openhands-app | Out-Null
-    `$deadline = [DateTime]::UtcNow.AddMinutes(3)
-    do {
-        Start-Sleep -Seconds 2
-        try {
-            Invoke-WebRequest -Uri `$url -UseBasicParsing -TimeoutSec 3 | Out-Null
-            break
-        } catch {}
-    } while ([DateTime]::UtcNow -lt `$deadline)
-}
-
-`$edgePaths = @(
-    "`${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
-    "`$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
-)
-`$edge = `$edgePaths | Where-Object { Test-Path -LiteralPath `$_ } | Select-Object -First 1
-if (`$edge) {
-    try {
-        Start-Process -FilePath `$edge -ArgumentList "--app=`$url", "--start-maximized" -ErrorAction Stop
-        exit
-    } catch {
-        Add-Content -LiteralPath (Join-Path `$env:TEMP "openhands-desktop.log") `
-            -Value "Falha ao abrir Edge Web App: `$(`$_.Exception.Message)"
-    }
-}
-`$chrome = Get-Command chrome.exe -ErrorAction SilentlyContinue
-if (`$chrome) {
-    Start-Process -FilePath `$chrome.Source -ArgumentList "--app=`$url", "--start-maximized"
-    exit
-}
-Start-Process `$url
-"@
-    Set-Content -LiteralPath $launcherPath -Value $launcher -Encoding utf8
-
-    $desktopDirectory = [Environment]::GetFolderPath("Desktop")
-    $startMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
-    $powerShellPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $shell = New-Object -ComObject WScript.Shell
-    foreach ($shortcutPath in @(
-        (Join-Path $desktopDirectory "OpenHands Desktop.lnk"),
-        (Join-Path $startMenuDirectory "OpenHands Desktop.lnk")
-    )) {
-        $shortcut = $shell.CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = $powerShellPath
-        $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcherPath`""
-        $shortcut.WorkingDirectory = $HomeDirectory
-        $shortcut.WindowStyle = 7
-        if (Test-Path -LiteralPath $iconPath) {
-            $shortcut.IconLocation = "$iconPath,0"
-        }
-        $shortcut.Description = "OpenHands Web App via OmniRoute"
-        $shortcut.Save()
-    }
-}
-
-function Request-OpenHandsPwaInstallation {
-    param([int]$Port = 3000)
-    $edge = @(
-        "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
-        "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
-    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-    if (-not $edge) {
-        Write-SetupMessage "Microsoft Edge não encontrado; o atalho Web App continuará disponível." "WARN"
-        return
-    }
-    Write-Host ""
-    Write-Host "O Edge será aberto para instalar o OpenHands como PWA."
-    Write-Host "Confirme em 'Aplicativo disponível' na barra de endereço ou em:"
-    Write-Host "Menu (...) > Aplicativos > Instalar OpenHands."
-    Start-Process -FilePath $edge -ArgumentList "http://localhost:$Port"
-    Read-Host "Após confirmar a instalação do OpenHands, pressione ENTER"
-}
-
 function ConvertTo-PodmanMachinePath {
     param([string]$WindowsPath)
     $normalized = $WindowsPath -replace "\\", "/"
@@ -656,76 +492,6 @@ function ConvertTo-PodmanMachinePath {
         return "/mnt/$($Matches[1].ToLower())/$($Matches[2])"
     }
     return $normalized
-}
-
-function Move-OpenHandsStateToHost {
-    param([string]$Engine, [string]$OpenHandsHomeDirectory)
-    $migrationMarker = Join-Path $OpenHandsHomeDirectory ".container-state-migrated"
-    if (Test-Path -LiteralPath $migrationMarker) { return }
-
-    & $Engine inspect openhands-app *> $null
-    if ($LASTEXITCODE -ne 0) { return }
-
-    Write-SetupMessage "Migrando conversas e configurações do OpenHands para '$OpenHandsHomeDirectory'."
-    Invoke-External $Engine @(
-        "cp", "openhands-app:/.openhands/.", $OpenHandsHomeDirectory
-    ) "Falha ao migrar o estado persistente do OpenHands"
-    New-Item -ItemType File -Path $migrationMarker -Force | Out-Null
-}
-
-function Start-PodmanOpenHands {
-    param([string]$SetupDirectory)
-    $envPath = Join-Path $SetupDirectory ".env"
-    $version = Get-EnvValue $envPath "OPENHANDS_VERSION"
-    if ([string]::IsNullOrWhiteSpace($version)) { $version = "1.7" }
-    $appKey = Get-EnvValue $envPath "OMNIROUTE_API_KEY"
-    $omniRoutePort = Get-EnvValue $envPath "PORT"
-    if ([string]::IsNullOrWhiteSpace($omniRoutePort)) { $omniRoutePort = "20128" }
-    $openHandsPort = Get-EnvValue $envPath "OPENHANDS_PORT"
-    if ([string]::IsNullOrWhiteSpace($openHandsPort)) { $openHandsPort = "3000" }
-    $agentTag = Get-EnvValue $envPath "OPENHANDS_AGENT_SERVER_TAG"
-    if ([string]::IsNullOrWhiteSpace($agentTag)) { $agentTag = "1.19.1-python" }
-    $projectsDirectory = Get-EnvValue $envPath "PROJECTS_DIR"
-    $openHandsHomeDirectory = Get-EnvValue $envPath "OPENHANDS_HOME_DIR"
-    $gitHubToken = Get-EnvValue $envPath "GITHUB_TOKEN"
-    $machineProjectsDirectory = ConvertTo-PodmanMachinePath $projectsDirectory
-    $sandboxVolumes = "${machineProjectsDirectory}:/workspace:rw"
-    $image = "omniroute-openhands:$version"
-
-    Invoke-External "podman" @(
-        "build", "--file", (Join-Path $SetupDirectory "openhands\Dockerfile"),
-        "--build-arg", "OPENHANDS_VERSION=$version",
-        "--tag", $image, (Join-Path $SetupDirectory "openhands")
-    ) "Falha ao construir a camada OmniRoute do OpenHands"
-
-    # OpenHands otherwise pulls this large image during API requests with a
-    # short SDK timeout, leaving the UI unavailable on slower connections.
-    Invoke-External "podman" @(
-        "pull", "ghcr.io/openhands/agent-server:$agentTag"
-    ) "Falha ao baixar a imagem de sandbox do OpenHands"
-
-    Invoke-External "podman" @(
-        "run", "--detach", "--replace", "--name", "openhands-app",
-        "--restart", "unless-stopped",
-        # The dynamically-created agent container calls back through
-        # host.docker.internal. A loopback-only binding blocks webhooks and MCP.
-        "--publish", "${openHandsPort}:3000",
-        "--add-host", "host.docker.internal:host-gateway",
-        "--env", "LLM_MODEL=openai/combo-coding",
-        "--env", "LLM_BASE_URL=http://host.docker.internal:${omniRoutePort}/v1",
-        "--env", "LLM_API_KEY=$appKey",
-        "--env", "LOG_ALL_EVENTS=true",
-        "--env", "AGENT_SERVER_IMAGE_REPOSITORY=ghcr.io/openhands/agent-server",
-        "--env", "AGENT_SERVER_IMAGE_TAG=$agentTag",
-        "--env", "SANDBOX_ENV_GH_TOKEN=$gitHubToken",
-        # Commands run in the agent sandbox. Mount the real Windows workspace
-        # there so edits persist on the host instead of the container overlay.
-        "--env", "SANDBOX_VOLUMES=$sandboxVolumes",
-        "--volume", "/run/podman/podman.sock:/var/run/docker.sock",
-        "--volume", "${openHandsHomeDirectory}:/.openhands",
-        "--volume", "${projectsDirectory}:/opt/workspace_base",
-        $image
-    ) "Falha ao iniciar o OpenHands no Podman"
 }
 
 function Remove-UnmanagedPodmanContainer {
@@ -743,7 +509,7 @@ function Remove-UnmanagedPodmanContainer {
 }
 
 function Start-ContainerMode {
-    param([string]$Engine, [string]$SetupDirectory, [bool]$IncludeOpenHands)
+    param([string]$Engine, [string]$SetupDirectory)
     Push-Location $SetupDirectory
     $previousPathConversion = $env:COMPOSE_CONVERT_WINDOWS_PATHS
     try {
@@ -756,15 +522,8 @@ function Start-ContainerMode {
             Remove-UnmanagedPodmanContainer -ContainerName "omniroute" `
                 -ExpectedComposeProject "omniroute-setup"
         }
-        $arguments = @("compose")
-        if ($IncludeOpenHands -and $Engine -ne "podman") {
-            $arguments += @("--profile", "openhands")
-        }
-        $arguments += @("up", "-d", "--pull", "missing", "--build")
+        $arguments = @("compose", "up", "-d", "--pull", "missing", "--build")
         Invoke-External $Engine $arguments "Falha ao iniciar os contêineres"
-        if ($IncludeOpenHands -and $Engine -eq "podman") {
-            Start-PodmanOpenHands -SetupDirectory $SetupDirectory
-        }
     } finally {
         $env:COMPOSE_CONVERT_WINDOWS_PATHS = $previousPathConversion
         Pop-Location
@@ -807,7 +566,6 @@ function Invoke-OmniRouteSetup {
         [string]$AchillesVersion,
         [AllowEmptyString()][string]$AchillesArtifactPath,
         [bool]$NonInteractive,
-        [bool]$SkipDesktopApp,
         [bool]$SkipAchilles,
         [bool]$SkipProviderLogin
     )
@@ -816,39 +574,36 @@ function Invoke-OmniRouteSetup {
     $envPath = if ($Mode -eq "container") { Join-Path $SetupDirectory ".env" } else { Join-Path $stateDirectory ".env" }
     New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
     if (-not (Test-Path -LiteralPath $envPath)) { Copy-Item (Join-Path $SetupDirectory ".env.example") $envPath }
+    Remove-EnvValue -Path $envPath -Names @(
+        "OPENHANDS_PORT",
+        "OPENHANDS_VERSION",
+        "OPENHANDS_AGENT_SERVER_TAG",
+        "OPENHANDS_HOME_DIR",
+        "OPENHANDS_SETTINGS_FILE",
+        "SANDBOX_VOLUMES",
+        "GITHUB_TOKEN",
+        "CONTAINER_SOCKET"
+    )
     Set-EnvValue $envPath "PORT" ([string]$Port)
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_REPO" $SkillsRepository
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_BRANCH" $SkillsBranch
-    $needsGitHubAuthentication = $Mode -eq "container" -or
-        (-not $SkipDesktopApp -and -not $SkipAchilles -and
-            [string]::IsNullOrWhiteSpace($AchillesArtifactPath))
-    $gitHubToken = if ($needsGitHubAuthentication) {
-        Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive
-    } else {
-        $null
+    $needsGitHubAuthentication = $Mode -eq "container"
+    if ($needsGitHubAuthentication) {
+        Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive | Out-Null
     }
     if ([string]::IsNullOrWhiteSpace($ProjectsPath)) {
         $ProjectsPath = Join-Path $homeDirectory "workspace"
     }
     $expandedProjectsPath = [Environment]::ExpandEnvironmentVariables($ProjectsPath)
     $projectsDirectory = [IO.Path]::GetFullPath($expandedProjectsPath)
-    $openHandsHomeDirectory = Join-Path $homeDirectory ".openhands"
     New-Item -ItemType Directory -Path $projectsDirectory -Force | Out-Null
-    New-Item -ItemType Directory -Path $openHandsHomeDirectory -Force | Out-Null
     $normalizedProjects = $projectsDirectory -replace "\\", "/"
-    $normalizedOpenHandsHome = $openHandsHomeDirectory -replace "\\", "/"
     Set-EnvValue $envPath "PROJECTS_DIR" $normalizedProjects
-    Set-EnvValue $envPath "OPENHANDS_HOME_DIR" $normalizedOpenHandsHome
-    $sandboxVolumes = "${normalizedProjects}:/workspace:rw"
-    Set-EnvValue $envPath "SANDBOX_VOLUMES" $sandboxVolumes
-    Set-EnvValue $envPath "GITHUB_TOKEN" $(if ($gitHubToken) { $gitHubToken } else { "" })
     Write-SetupMessage "Preparando o modo $Mode. Reexecuções preservam banco, APPKEY e configurações."
     if ($Mode -eq "container") {
         New-Item -ItemType File -Path (Join-Path $stateDirectory "mode.container") -Force | Out-Null
         $engine = Ensure-ContainerEngine
-        $containerSocket = "/var/run/docker.sock"
-        Set-EnvValue $envPath "CONTAINER_SOCKET" $containerSocket
-        Start-ContainerMode -Engine $engine -SetupDirectory $SetupDirectory -IncludeOpenHands:$false
+        Start-ContainerMode -Engine $engine -SetupDirectory $SetupDirectory
     } else {
         Remove-Item -LiteralPath (Join-Path $stateDirectory "mode.container") -Force -ErrorAction SilentlyContinue
         Ensure-LocalDependencies
@@ -863,7 +618,7 @@ function Invoke-OmniRouteSetup {
     Set-TokenEfficiencyDefaults -BaseUrl $baseUrl -AppKey $appKey
     Set-DefaultCombos -BaseUrl $baseUrl -ConfigPath (Join-Path $SetupDirectory "combos-config.json") -AppKey $appKey
 
-    if (-not $SkipDesktopApp -and -not $SkipAchilles) {
+    if (-not $SkipAchilles) {
         $achillesInstallation = Install-Achilles -HomeDirectory $homeDirectory `
             -ProjectsDirectory $projectsDirectory -OmniRoutePort $Port `
             -Repository $AchillesRepository -Version $AchillesVersion `
@@ -874,21 +629,6 @@ function Invoke-OmniRouteSetup {
         Write-SetupMessage "Abra o Achilles pelo ícone da Área de Trabalho ou Menu Iniciar." "OK"
     }
 
-    if ($Mode -eq "container" -and -not $SkipDesktopApp) {
-        Move-OpenHandsStateToHost -Engine $engine `
-            -OpenHandsHomeDirectory $openHandsHomeDirectory
-        Start-ContainerMode -Engine $engine -SetupDirectory $SetupDirectory -IncludeOpenHands:$true
-        Wait-HttpReady -Url "http://localhost:3000" -TimeoutSeconds 180
-        Set-OpenHandsWebSettings -BaseUrl "http://localhost:3000" -AppKey $appKey -OmniRoutePort $Port
-        Wait-HttpReady -Url "http://localhost:3000/api/v1/app-conversations/search?limit=1" -TimeoutSeconds 120
-        Install-OpenHandsDesktopApp -HomeDirectory $homeDirectory -Engine $engine -Port 3000
-        if (-not $NonInteractive) {
-            Request-OpenHandsPwaInstallation -Port 3000
-        }
-        Write-SetupMessage "Abra o OpenHands pelo ícone 'OpenHands Desktop' na Área de Trabalho ou no Menu Iniciar." "OK"
-    } elseif ($Mode -eq "local" -and -not $SkipDesktopApp) {
-        Install-OpenCode -HomeDirectory $homeDirectory -Port $Port
-    }
     Install-OmniCommand -SetupDirectory $SetupDirectory -HomeDirectory $homeDirectory
 
     if (-not $SkipProviderLogin -and -not $NonInteractive) {
@@ -896,9 +636,6 @@ function Invoke-OmniRouteSetup {
         Read-Host "Conecte os provedores OAuth no Dashboard e pressione ENTER"
     }
     Write-SetupMessage "OmniRoute disponível em $baseUrl; configuração concluída." "OK"
-    if ($Mode -eq "container" -and -not $SkipDesktopApp) {
-        Write-Host "OpenHands: use o ícone 'OpenHands Desktop' do Windows (http://localhost:3000)."
-    }
 }
 
-Export-ModuleMember -Function Set-EnvValue, Get-EnvValue, Get-ContainerEngine, Sync-SkillsRepository, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-DefaultCombos, Write-OpenCodeConfiguration, Set-OpenHandsWebSettings, Get-PathWithEntry, ConvertTo-PodmanMachinePath, Invoke-OmniRouteSetup
+Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Sync-SkillsRepository, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-DefaultCombos, Get-PathWithEntry, ConvertTo-PodmanMachinePath, Invoke-OmniRouteSetup

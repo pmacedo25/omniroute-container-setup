@@ -15,7 +15,6 @@ services:
       REQUIRE_API_KEY: "true"
       OMNIROUTE_MEMORY_MB: ${OMNIROUTE_MEMORY_MB:-1024}
     ports:
-      # Agent sandboxes reach OmniRoute through the container host gateway.
       - "${PORT:-20128}:${PORT:-20128}"
     volumes:
       - omniroute-data:/app/data
@@ -39,42 +38,6 @@ services:
       SKILLS_SYNC_INTERVAL_SECONDS: ${SKILLS_SYNC_INTERVAL_SECONDS:-3600}
     volumes:
       - omniroute-skills:/skills
-
-  openhands:
-    build:
-      context: ./openhands
-      dockerfile: Dockerfile
-      args:
-        OPENHANDS_VERSION: ${OPENHANDS_VERSION:-1.7}
-    image: omniroute-openhands:${OPENHANDS_VERSION:-1.7}
-    container_name: openhands-app
-    restart: unless-stopped
-    profiles: ["openhands"]
-    depends_on:
-      omniroute:
-        condition: service_healthy
-    environment:
-      LLM_MODEL: openai/combo-coding
-      LLM_BASE_URL: http://host.docker.internal:${PORT:-20128}/v1
-      LLM_API_KEY: ${OMNIROUTE_API_KEY}
-      LOG_ALL_EVENTS: "true"
-      AGENT_SERVER_IMAGE_REPOSITORY: ghcr.io/openhands/agent-server
-      AGENT_SERVER_IMAGE_TAG: ${OPENHANDS_AGENT_SERVER_TAG:-1.19.1-python}
-      SANDBOX_VOLUMES: ${SANDBOX_VOLUMES}
-      SANDBOX_ENV_GH_TOKEN: ${GITHUB_TOKEN:-}
-    ports:
-      # Agent sandboxes use this host-gateway port for webhooks and MCP.
-      - "${OPENHANDS_PORT:-3000}:3000"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ${CONTAINER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
-      - type: bind
-        source: ${OPENHANDS_HOME_DIR}
-        target: /.openhands
-      - type: bind
-        source: ${PROJECTS_DIR}
-        target: /opt/workspace_base
 
 volumes:
   omniroute-data:

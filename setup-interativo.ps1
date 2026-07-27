@@ -14,7 +14,6 @@ param(
     [Alias("OpenRouterAIArtifactPath")]
     [string]$AchillesArtifactPath,
     [switch]$NonInteractive,
-    [switch]$SkipDesktopApp,
     [Alias("SkipOpenRouterAI")]
     [switch]$SkipAchilles,
     [switch]$SkipProviderLogin
@@ -77,7 +76,6 @@ $setupOptions = @{
     AchillesVersion = $AchillesVersion
     AchillesArtifactPath = $AchillesArtifactPath
     NonInteractive    = $NonInteractive.IsPresent
-    SkipDesktopApp    = $SkipDesktopApp.IsPresent
     SkipAchilles  = $SkipAchilles.IsPresent
     SkipProviderLogin = $SkipProviderLogin.IsPresent
 }

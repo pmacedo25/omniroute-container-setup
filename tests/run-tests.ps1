@@ -26,6 +26,11 @@ try {
     Set-EnvValue $envPath "SECRET" "second"
     Assert-Equal "second" (Get-EnvValue $envPath "SECRET") "Set-EnvValue deve atualizar"
     Assert-Equal 1 (@(Get-Content $envPath | Where-Object { $_ -match "^SECRET=" }).Count) "Variável não pode duplicar"
+    Set-EnvValue $envPath "OPENHANDS_VERSION" "legacy"
+    Set-EnvValue $envPath "GITHUB_TOKEN" "legacy-secret"
+    Remove-EnvValue $envPath @("OPENHANDS_VERSION", "GITHUB_TOKEN")
+    Assert-True ($null -eq (Get-EnvValue $envPath "OPENHANDS_VERSION")) "Configuração legada deve ser removida"
+    Assert-True ($null -eq (Get-EnvValue $envPath "GITHUB_TOKEN")) "Segredo legado não pode permanecer no ambiente"
 
     $combos = Get-Content (Join-Path $projectDirectory "combos-config.json") -Raw | ConvertFrom-Json
     Assert-Equal 3 @($combos.combos).Count "Devem existir três combos"
@@ -39,16 +44,6 @@ try {
     }
     Assert-True (-not (@($combos.combos.models) -join "," -match "gpt-5\.6|claude-opus")) "Combos padrão não devem usar modelos premium"
     Assert-True (Test-Path (Join-Path $projectDirectory "benchmarks\README.md")) "Matriz de benchmark deve estar versionada"
-
-    Write-OpenCodeConfiguration -HomeDirectory $testRoot -Port 20128
-    $openCodePath = Join-Path $testRoot ".config\opencode\opencode.json"
-    $openCode = Get-Content $openCodePath -Raw | ConvertFrom-Json
-    Assert-Equal "omniroute/combo-coding" $openCode.model "Modelo principal OpenCode"
-    Assert-Equal "http://localhost:20128/v1" $openCode.provider.omniroute.options.baseURL "Endpoint OpenCode"
-    Assert-Equal "{env:OMNIROUTE_API_KEY}" $openCode.provider.omniroute.options.apiKey "APPKEY não deve ser gravada no JSON"
-    Assert-Equal 1 @($openCode.enabled_providers).Count "OpenCode deve permitir somente um provedor"
-    Assert-Equal "omniroute" $openCode.enabled_providers[0] "OpenCode deve permitir somente OmniRoute"
-    Assert-Equal 1 @($openCode.provider.PSObject.Properties).Count "OpenCode não deve configurar outros provedores"
 
     Assert-Equal "C:\Tools" (Get-PathWithEntry -CurrentPath $null -Entry "C:\Tools") "PATH nulo deve ser suportado"
     Assert-Equal "C:\Windows;C:\Tools" (Get-PathWithEntry -CurrentPath "C:\Windows" -Entry "C:\Tools") "Entrada deve ser adicionada"
@@ -115,25 +110,12 @@ try {
     Assert-True ($moduleSource -match 'Read-Host "APPKEY do OmniRoute"') "Setup deve aceitar APPKEY manual como fallback"
     Assert-True ($moduleSource -match 'Test-RegisteredAppKey') "APPKEY existente precisa estar registrada no dashboard"
     Assert-True ($moduleSource -match '\{"name":"omniroute-setup","label":"omniroute-setup"\}') "Criação da APPKEY deve suportar os schemas real e documentado"
-    Assert-True ($moduleSource -match "OpenHands Desktop\.lnk") "Setup deve criar o atalho Desktop do OpenHands"
-    Assert-True ($moduleSource -match 'favicon\.ico') "Atalho deve usar o ícone próprio do OpenHands"
-    Assert-True ($moduleSource -match '"--app=`\$url"') "OpenHands deve abrir em modo Web App"
-    Assert-True ($moduleSource -notmatch 'user-data-dir') "Launcher não deve gerar argumentos de perfil com aspas frágeis"
-    Assert-True ($moduleSource -match 'openhands-desktop\.log') "Falhas do launcher devem deixar diagnóstico"
-    Assert-True ($moduleSource -match "use o ícone 'OpenHands Desktop'") "Output deve explicar como abrir o OpenHands"
-    Assert-True ($moduleSource -match '/api/v1/settings') "Setup deve persistir settings pela API Web V1"
-    Assert-True ($moduleSource -notmatch 'agent_settings\.json') "Setup não deve usar configuração exclusiva do CLI"
-    Assert-True ($moduleSource -match '/run/podman/podman\.sock:/var/run/docker\.sock') "Podman deve montar o socket Linux diretamente"
-    Assert-True ($moduleSource -match 'SANDBOX_VOLUMES=\$sandboxVolumes') "Sandbox deve montar o workspace local do Windows"
-    Assert-True ($moduleSource -match 'OPENHANDS_HOME_DIR') "Estado do OpenHands deve ter diretório próprio"
-    Assert-True ($moduleSource -match 'Move-OpenHandsStateToHost') "Estado legado do OpenHands deve ser migrado sem perda"
-    Assert-True ($moduleSource -notmatch '"openhands-data:/.openhands"') "OpenHands não deve manter estado apenas em volume interno"
-    Assert-True ($moduleSource -match ':/workspace:rw') "Workspace local deve ser gravável pelo agente"
-    Assert-True ($moduleSource -notmatch '/home/openhands/\.config/gh:ro') "GitHub CLI não deve bloquear a pasta .config do sandbox"
-    Assert-True ($moduleSource -match 'SANDBOX_ENV_GH_TOKEN=\$gitHubToken') "Token do GitHub CLI deve chegar ao sandbox"
+    Assert-True ($moduleSource -notmatch 'Install-OpenCode|Set-OpenHands|Start-PodmanOpenHands|Install-OpenHands') "Setup não deve conter integrações legadas"
+    Assert-True ($composeSource -notmatch '(?i)openhands|opencode') "Compose não deve conter clientes legados"
+    Assert-True ($envExampleSource -notmatch '(?i)openhands|opencode') "Ambiente não deve conter opções legadas"
+    Assert-Equal 0 @(Get-ChildItem (Join-Path $projectDirectory "openhands") -File -ErrorAction SilentlyContinue).Count "Imagem customizada legada deve ser removida"
     Assert-True ($moduleSource -match 'Remove-DuplicateSetupAppKeys') "Setup deve consolidar suas AppKeys duplicadas"
     Assert-True ($moduleSource -match 'PSObject\.Properties\[\$propertyName\]') "Leitura de AppKeys deve tolerar campos opcionais"
-    Assert-True ($moduleSource -match 'Request-OpenHandsPwaInstallation') "Setup deve solicitar a instalação PWA"
     Assert-True ($moduleSource -match 'GitHub\.cli') "Setup deve instalar o GitHub CLI quando necessário"
     Assert-True ($moduleSource -match 'gh auth login') "Setup deve orientar o login do GitHub CLI em modo não interativo"
     Assert-True ($moduleSource -match '"auth", "login"') "Setup interativo deve iniciar o login do GitHub CLI"
@@ -142,13 +124,8 @@ try {
     Assert-True ($moduleSource -match 'Remove-UnmanagedPodmanContainer') "Reexecução deve corrigir containers fora do Compose"
     Assert-True ($moduleSource -match '"rm", "--force", \$ContainerName') "Correção deve remover somente o container incompatível"
     Assert-True ($moduleSource -match 'volumes persistentes serão preservados') "Correção deve informar que os volumes são preservados"
-    Assert-True ($moduleSource -match '"pull", "ghcr\.io/openhands/agent-server:\$agentTag"') "Imagem de sandbox deve ser pré-baixada"
-    Assert-True ($moduleSource -match 'app-conversations/search\?limit=1') "Setup deve validar a API de conversas"
     Assert-True ($moduleSource -match '/api/providers/\$\(\$connection\.id\)/models') "Combos devem ser filtrados pelos modelos realmente disponíveis"
     Assert-True ($moduleSource -match 'Nenhum provedor de IA ativo') "Setup deve explicar quando não há provedor conectado"
-    Assert-True ($moduleSource -match 'num_retries = 1') "OpenHands não deve aguardar vários retries quando o provedor falhar"
-    Assert-True ($moduleSource -match 'max_input_tokens = 272000') "OpenHands deve limitar contexto excessivo"
-    Assert-True ($moduleSource -match 'max_output_tokens = 16000') "OpenHands deve limitar respostas excessivas"
     Assert-True ($moduleSource -match 'Set-TokenEfficiencyDefaults') "Setup deve aplicar otimizações de tokens"
     Assert-True ($moduleSource -match 'Test-AchillesInstallation') "Setup deve validar o Achilles após instalar"
     Assert-True ($moduleSource -match 'Install-Achilles') "Setup deve instalar Achilles nos dois modos"
@@ -171,15 +148,8 @@ try {
     Assert-True ($omniSource -match '\.achilles\\current\.json') "Doctor deve diagnosticar a IDE"
     Assert-True ($moduleSource -match 'defaultMode = "stacked"') "RTK e Caveman devem vir habilitados em pipeline"
     Assert-True ($moduleSource -match 'session-dedup.+enabled = \$true') "Deduplicação de sessão deve vir habilitada"
-    Assert-True ($moduleSource -match 'A alteração vale para novas conversas') "Setup deve explicar como trocar de combo"
-    Assert-True ($moduleSource -match '"--publish", "\$\{openHandsPort\}:3000"') "OpenHands deve aceitar callbacks dos contêineres de agente"
-    Assert-True ($composeSource -match '"\$\{PORT:-20128\}:\$\{PORT:-20128\}"') "OmniRoute deve aceitar chamadas dos contêineres de agente"
-    Assert-True ($composeSource -match '"\$\{OPENHANDS_PORT:-3000\}:3000"') "Compose deve aceitar callbacks dos contêineres de agente"
+    Assert-True ($composeSource -match '"\$\{PORT:-20128\}:\$\{PORT:-20128\}"') "OmniRoute deve ficar acessível no host"
     Assert-Equal "/mnt/c/Users/test/workspace" (ConvertTo-PodmanMachinePath "C:\Users\test\workspace") "Workspace deve ser visível na VM Podman"
-
-    $catalogSource = Get-Content (Join-Path $projectDirectory "openhands\omniroute_model_service.py") -Raw
-    Assert-Equal 3 ([regex]::Matches($catalogSource, 'LLMModel\(provider="omniroute"').Count) "Catálogo deve conter três combos"
-    Assert-True ($catalogSource -notmatch 'anthropic|gemini|bedrock') "Catálogo não deve expor outros provedores"
 
     $tokens = $null
     $parseErrors = $null

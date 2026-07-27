@@ -408,7 +408,7 @@ idempotente pelo setup.
 
 ### M2 — validação (3–5 dias úteis)
 
-Benchmark, E2E, rollback e relatório comparando Achilles com OpenHands.
+Benchmark, E2E, rollback e relatório de desempenho do Achilles.
 
 ## 10. Critério de encerramento do experimento
 
