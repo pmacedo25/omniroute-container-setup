@@ -129,7 +129,13 @@ criação bem-sucedida dos atalhos Achilles.
 
 O catálogo de IA não é congelado no instalador. Achilles consulta `/v1/models`
 do OmniRoute e permite escolher dinamicamente os combos e modelos expostos pelo
-gateway, sem alterar `combos-config.json`.
+gateway, sem alterar `combos-config.json`. O resultado é cruzado com
+`/api/providers`: combos continuam disponíveis, mas modelos diretos aparecem
+somente para providers conectados pelo usuário.
+
+Ao final da instalação, o setup valida executável, launcher, versão ativa,
+configuração dinâmica, origem da AppKey e filtro de providers. Uma falha nessa
+etapa interrompe o fluxo em vez de anunciar uma instalação incompleta.
 
 ## Operação
 

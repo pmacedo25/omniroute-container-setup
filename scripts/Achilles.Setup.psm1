@@ -41,6 +41,7 @@ function Write-AchillesConfiguration {
         apiKeyEnvironmentVariable = "OMNIROUTE_API_KEY"
         workspace = $ProjectsDirectory
         modelSelection = "dynamic"
+        configuredProvidersOnly = $true
         telemetry = $false
     }
     $configPath = Join-Path $stateDirectory "config.json"
@@ -353,4 +354,31 @@ function Install-Achilles {
     }
 }
 
-Export-ModuleMember -Function Write-AchillesConfiguration, Copy-AchillesLegacyState, Test-AchillesArtifact, Get-AchillesVersion, Install-Achilles
+function Test-AchillesInstallation {
+    param(
+        [Parameter(Mandatory)][string]$HomeDirectory,
+        [Parameter(Mandatory)][pscustomobject]$Installation
+    )
+    $currentPath = Join-Path $HomeDirectory ".achilles\current.json"
+    if (-not (Test-Path -LiteralPath $Installation.Executable -PathType Leaf)) {
+        throw "A instalação do Achilles não criou o executável esperado: $($Installation.Executable)"
+    }
+    if (-not (Test-Path -LiteralPath $Installation.Config -PathType Leaf)) {
+        throw "A instalação do Achilles não criou a configuração esperada: $($Installation.Config)"
+    }
+    if (-not (Test-Path -LiteralPath $Installation.Launcher -PathType Leaf)) {
+        throw "A instalação do Achilles não criou o launcher esperado: $($Installation.Launcher)"
+    }
+    if (-not (Test-Path -LiteralPath $currentPath -PathType Leaf)) {
+        throw "A instalação do Achilles não registrou a versão ativa."
+    }
+    $configuration = Get-Content -LiteralPath $Installation.Config -Raw | ConvertFrom-Json
+    if ($configuration.modelSelection -ne "dynamic" -or
+        $configuration.configuredProvidersOnly -ne $true -or
+        $configuration.apiKeyEnvironmentVariable -ne "OMNIROUTE_API_KEY") {
+        throw "A configuração do Achilles não atende ao contrato OmniRoute."
+    }
+    return $true
+}
+
+Export-ModuleMember -Function Write-AchillesConfiguration, Copy-AchillesLegacyState, Test-AchillesArtifact, Get-AchillesVersion, Install-Achilles, Test-AchillesInstallation

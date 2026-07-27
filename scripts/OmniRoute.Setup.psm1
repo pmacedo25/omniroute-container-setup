@@ -864,11 +864,13 @@ function Invoke-OmniRouteSetup {
     Set-DefaultCombos -BaseUrl $baseUrl -ConfigPath (Join-Path $SetupDirectory "combos-config.json") -AppKey $appKey
 
     if (-not $SkipDesktopApp -and -not $SkipAchilles) {
-        Install-Achilles -HomeDirectory $homeDirectory `
+        $achillesInstallation = Install-Achilles -HomeDirectory $homeDirectory `
             -ProjectsDirectory $projectsDirectory -OmniRoutePort $Port `
             -Repository $AchillesRepository -Version $AchillesVersion `
             -ArtifactPath $AchillesArtifactPath `
-            -FallbackIconPath (Join-Path $SetupDirectory "design\achilles\achilles.ico") | Out-Null
+            -FallbackIconPath (Join-Path $SetupDirectory "design\achilles\achilles.ico")
+        Test-AchillesInstallation -HomeDirectory $homeDirectory `
+            -Installation $achillesInstallation | Out-Null
         Write-SetupMessage "Abra o Achilles pelo ícone da Área de Trabalho ou Menu Iniciar." "OK"
     }
 
