@@ -63,13 +63,14 @@ try {
         Where-Object { $_ -ieq (Split-Path -Parent $achillesCommand) }).Count -eq 1) "Reexecução não pode duplicar PATH"
 
     $achillesConfig = Write-AchillesConfiguration -HomeDirectory $testRoot `
-        -ProjectsDirectory "C:\Users\test\workspace" -OmniRoutePort 20128
+        -OmniRoutePort 20128
     $achillesSettings = Get-Content -LiteralPath $achillesConfig -Raw | ConvertFrom-Json
     Assert-Equal "http://127.0.0.1:20128/v1" $achillesSettings.omnirouteBaseUrl "IDE deve usar loopback do host"
     Assert-Equal "http://127.0.0.1:20128/v1/models" $achillesSettings.omnirouteCatalogUrl "IDE deve consultar catálogo dinâmico"
     Assert-Equal "OMNIROUTE_API_KEY" $achillesSettings.apiKeyEnvironmentVariable "Config não deve duplicar segredo"
     Assert-Equal "dynamic" $achillesSettings.modelSelection "Seleção não pode ser hardcoded no instalador"
     Assert-Equal $true $achillesSettings.configuredProvidersOnly "IDE deve listar apenas providers conectados"
+    Assert-True ($null -eq $achillesSettings.PSObject.Properties["workspace"]) "IDE não deve fixar uma pasta de trabalho"
     Assert-True ($null -eq $achillesSettings.PSObject.Properties["allowedCombos"]) "Config não deve fixar combos"
     Assert-True (-not (Get-Content -LiteralPath $achillesConfig -Raw).Contains("sk-")) "Config da IDE não deve conter chave"
 
@@ -118,8 +119,8 @@ try {
     Assert-True ($setupSource -match 'do \{[\s\S]+Read-Host "URL"[\s\S]+\} while') "Modo assistido deve repetir a pergunta até receber uma URL"
     Assert-True ($setupSource -notmatch 'defaultSkillsRepository') "Setup não deve manter repositório padrão de skills"
     Assert-True ($envExampleSource -match '(?m)^OMNIROUTE_SKILLS_REPO=\s*$') "Exemplo de ambiente não deve sugerir repositório de skills"
-    Assert-True ($setupSource -match 'Informe a pasta local onde os projetos serão criados') "Setup deve solicitar a raiz local dos projetos"
-    Assert-True ($setupSource -match 'Join-Path \$env:USERPROFILE "workspace"') "Setup deve oferecer a raiz padrão dos projetos"
+    Assert-True ($setupSource -notmatch 'ProjectsPath|WorkspacePath') "Setup não deve solicitar uma pasta de projetos"
+    Assert-True ($moduleSource -notmatch 'Set-EnvValue.+PROJECTS_DIR') "Setup não deve criar uma raiz artificial de projetos"
     Assert-True ($moduleSource -match 'Read-Host "APPKEY do OmniRoute"') "Setup deve aceitar APPKEY manual como fallback"
     Assert-True ($moduleSource -match 'Test-RegisteredAppKey') "APPKEY existente precisa estar registrada no dashboard"
     Assert-True ($moduleSource -match '\{"name":"omniroute-setup","label":"omniroute-setup"\}') "Criação da APPKEY deve suportar os schemas real e documentado"
@@ -144,6 +145,7 @@ try {
     Assert-True ($moduleSource -match 'Install-Achilles') "Setup deve instalar Achilles nos dois modos"
     Assert-True ($achillesModuleSource -match 'Microsoft\\Windows\\Start Menu\\Programs') "Achilles deve ser localizado pela pesquisa do Windows"
     Assert-True ($achillesModuleSource -match 'achilles\.cmd') "Setup deve criar o comando achilles"
+    Assert-True ($achillesModuleSource -notmatch 'ProjectsDirectory') "Launcher não deve impor uma pasta padrão"
     Assert-True ($setupSource -match 'AchillesArtifactPath') "Setup deve aceitar artefato local para validação"
     Assert-True ($setupSource -match 'Alias\("OpenRouterAIArtifactPath"\)') "Automação anterior deve continuar aceita durante a migração"
     Assert-True ($achillesModuleSource -match '\$installedExecutables = @\(if') "Reexecução com um executável deve preservar sem erro de Count"
@@ -164,8 +166,6 @@ try {
     Assert-True ($moduleSource -match 'defaultMode = "stacked"') "RTK e Caveman devem vir habilitados em pipeline"
     Assert-True ($moduleSource -match 'session-dedup.+enabled = \$true') "Deduplicação de sessão deve vir habilitada"
     Assert-True ($composeSource -match '"\$\{PORT:-20128\}:\$\{PORT:-20128\}"') "OmniRoute deve ficar acessível no host"
-    Assert-Equal "/mnt/c/Users/test/workspace" (ConvertTo-PodmanMachinePath "C:\Users\test\workspace") "Workspace deve ser visível na VM Podman"
-
     $tokens = $null
     $parseErrors = $null
     [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $projectDirectory "setup-interativo.ps1"), [ref]$tokens, [ref]$parseErrors) | Out-Null

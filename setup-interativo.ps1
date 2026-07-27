@@ -4,8 +4,6 @@ param(
     [string]$Mode,
     [string]$SkillsRepository,
     [string]$SkillsBranch = "main",
-    [Alias("WorkspacePath")]
-    [string]$ProjectsPath,
     [int]$Port = 20128,
     [Alias("OpenRouterAIRepository")]
     [string]$AchillesRepository = "pmacedo25/Achilles-Releases",
@@ -35,21 +33,6 @@ if ([string]::IsNullOrWhiteSpace($Mode)) {
     }
 }
 
-$defaultProjectsPath = Join-Path $env:USERPROFILE "workspace"
-if ([string]::IsNullOrWhiteSpace($ProjectsPath)) {
-    if ($NonInteractive) {
-        $ProjectsPath = $defaultProjectsPath
-    } else {
-        Write-Host "Informe a pasta local onde os projetos serão criados"
-        $projectsInput = Read-Host "Path (padrão: $defaultProjectsPath)"
-        $ProjectsPath = if ([string]::IsNullOrWhiteSpace($projectsInput)) {
-            $defaultProjectsPath
-        } else {
-            $projectsInput.Trim().Trim('"')
-        }
-    }
-}
-
 if ([string]::IsNullOrWhiteSpace($SkillsRepository)) {
     if ($NonInteractive) {
         throw "O parâmetro -SkillsRepository é obrigatório no modo não interativo."
@@ -70,7 +53,6 @@ $setupOptions = @{
     SetupDirectory    = $PSScriptRoot
     SkillsRepository  = $SkillsRepository
     SkillsBranch      = $SkillsBranch
-    ProjectsPath      = $ProjectsPath
     Port              = $Port
     AchillesRepository = $AchillesRepository
     AchillesVersion = $AchillesVersion

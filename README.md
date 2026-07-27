@@ -21,11 +21,10 @@ Modo assistido:
 .\setup-interativo.ps1
 ```
 
-Nesse modo o instalador pergunta a raiz local dos projetos e exige a URL do
-repositório GitHub de skills, sem preencher um repositório padrão. Pressionar
-Enter usa (e cria quando necessário) `%USERPROFILE%\workspace` somente para a
-pasta de projetos. Os projetos ficam diretamente dentro dessa pasta, sem uma
-subpasta `projects`.
+Nesse modo o instalador exige a URL do repositório GitHub de skills, sem
+preencher um repositório padrão. Nenhuma pasta de projetos é criada: o Achilles
+abre como uma IDE comum e trabalha com as pastas ou workspaces escolhidos em
+cada janela.
 
 Modo automático em contêiner:
 
@@ -44,7 +43,6 @@ Modo local:
 Parâmetros úteis:
 
 - `-SkillsRepository <URL>` e `-SkillsBranch <nome>`
-- `-ProjectsPath "D:\projetos"` para escolher a raiz dos projetos
 - `-Port 20128`
 - `-SkipAchilles` para instalar somente o gateway
 - `-AchillesVersion <semver|latest>`
@@ -93,8 +91,8 @@ inclui esse diretório no PATH do usuário e registra atalhos na Área de Trabal
 e no Menu Iniciar. Assim, um novo terminal pode executar `achilles` e a pesquisa
 do Windows encontra o aplicativo sem MSI ou permissões administrativas.
 
-Projetos permanecem em `%USERPROFILE%\workspace` (ou `-ProjectsPath`) e a
-configuração fica em `%USERPROFILE%\.achilles`. A AppKey não é duplicada no
+Projetos permanecem onde o usuário escolher, e a configuração do aplicativo
+fica em `%USERPROFILE%\.achilles`. A AppKey não é duplicada no
 JSON: o processo lê `OMNIROUTE_API_KEY` do ambiente do usuário. O setup é a
 única autoridade de atualização e ativa versões por `current.json`.
 

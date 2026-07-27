@@ -28,7 +28,6 @@ function Get-AchillesArchitecture {
 function Write-AchillesConfiguration {
     param(
         [string]$HomeDirectory,
-        [string]$ProjectsDirectory,
         [int]$OmniRoutePort
     )
     $stateDirectory = Join-Path $HomeDirectory $script:AchillesStateDirectoryName
@@ -39,7 +38,6 @@ function Write-AchillesConfiguration {
         omnirouteHealthUrl = "http://127.0.0.1:$OmniRoutePort/api/monitoring/health"
         omnirouteCatalogUrl = "http://127.0.0.1:$OmniRoutePort/v1/models"
         apiKeyEnvironmentVariable = "OMNIROUTE_API_KEY"
-        workspace = $ProjectsDirectory
         modelSelection = "dynamic"
         configuredProvidersOnly = $true
         telemetry = $false
@@ -191,8 +189,7 @@ function Get-AchillesVersion {
 function New-AchillesLauncher {
     param(
         [string]$HomeDirectory,
-        [string]$InstallRoot,
-        [string]$ProjectsDirectory
+        [string]$InstallRoot
     )
     $stateDirectory = Join-Path $HomeDirectory ".achilles"
     $launcherPath = Join-Path $stateDirectory "Achilles.ps1"
@@ -211,12 +208,11 @@ if (-not (Test-Path -LiteralPath `$executable -PathType Leaf)) {
 }
 `$env:ACHILLES_CONFIG = Join-Path `$stateDirectory "config.json"
 `$env:OPENAI_API_KEY = `$env:OMNIROUTE_API_KEY
-`$arguments = if (@(`$WorkspaceArguments).Count -gt 0) {
-    @(`$WorkspaceArguments)
+if (@(`$WorkspaceArguments).Count -gt 0) {
+    Start-Process -FilePath `$executable -ArgumentList @(`$WorkspaceArguments)
 } else {
-    @("$ProjectsDirectory")
+    Start-Process -FilePath `$executable
 }
-Start-Process -FilePath `$executable -ArgumentList `$arguments
 "@
     Set-Content -LiteralPath $launcherPath -Value $launcher -Encoding utf8
     return $launcherPath
@@ -295,7 +291,6 @@ function Install-Achilles {
     [CmdletBinding()]
     param(
         [string]$HomeDirectory,
-        [string]$ProjectsDirectory,
         [int]$OmniRoutePort,
         [string]$Repository = $script:AchillesDefaultRepository,
         [string]$Version = "latest",
@@ -352,7 +347,7 @@ function Install-Achilles {
     }
 
     $configPath = Write-AchillesConfiguration -HomeDirectory $HomeDirectory `
-        -ProjectsDirectory $ProjectsDirectory -OmniRoutePort $OmniRoutePort
+        -OmniRoutePort $OmniRoutePort
     $currentPath = Join-Path $stateDirectory "current.json"
     $currentTemporaryPath = "$currentPath.new"
     [ordered]@{
@@ -370,17 +365,17 @@ function Install-Achilles {
         $iconPath = $executablePath
     }
     $launcherPath = New-AchillesLauncher -HomeDirectory $HomeDirectory `
-        -InstallRoot $installRoot -ProjectsDirectory $ProjectsDirectory
+        -InstallRoot $installRoot
     $commandPath = Install-AchillesCommand -HomeDirectory $HomeDirectory `
         -LauncherPath $launcherPath
     $shortcutPaths = @(New-AchillesShortcuts -LauncherPath $launcherPath -IconPath $iconPath `
-        -WorkingDirectory $ProjectsDirectory
+        -WorkingDirectory $HomeDirectory
     )
     Write-AchillesMessage "Achilles $resolvedVersion instalado sem elevação." "OK"
     if ($legacyStateMigrated) {
         Write-AchillesMessage "Configurações do OpenRouterAI foram copiadas; o estado original foi preservado para rollback." "OK"
     }
-    Write-AchillesMessage "Na primeira abertura, confirme a confiança no workspace para habilitar agentes, tarefas e ferramentas." "INFO"
+    Write-AchillesMessage "Abra uma pasta ou workspace no Achilles; o chat e as ferramentas usarão o contexto aberto na janela." "INFO"
     return [pscustomobject]@{
         Version = $resolvedVersion
         Executable = $executablePath

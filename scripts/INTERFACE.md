@@ -46,7 +46,7 @@ Não pertence aqui:
   instalador.
 - Executável: exatamente um `Achilles.exe` no artefato.
 - Artefato: `Achilles-win-x64-<semver>.zip`.
-- Workspace padrão: `%USERPROFILE%\workspace`.
+- O Achilles não fixa um workspace; cada janela usa as pastas abertas pelo usuário.
 
 ## Abusos que devem falhar
 

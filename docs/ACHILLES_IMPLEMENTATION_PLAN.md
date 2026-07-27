@@ -10,7 +10,7 @@ distribuição pública, serviço SaaS ou produto que exija manutenção contín
 O Achilles:
 
 - roda como aplicativo Electron no Windows, sem contêiner;
-- abre diretamente `%USERPROFILE%\workspace`;
+- abre sem pasta fixa e permite selecionar pastas ou workspaces;
 - usa Git, `gh`, Node, Python, C++ e demais ferramentas instaladas no host;
 - fala apenas com o OmniRoute local pela API OpenAI-compatible;
 - exibe somente `combo-testing`, `combo-coding` e `combo-refining`;
@@ -93,7 +93,6 @@ primeiro push. Não criar automaticamente outro repositório com o mesmo nome.
   "omnirouteBaseUrl": "http://localhost:20128/v1",
   "omnirouteHealthUrl": "http://localhost:20128/api/monitoring/health",
   "apiKeyEnvironmentVariable": "OMNIROUTE_API_KEY",
-  "workspace": "%USERPROFILE%\\workspace",
   "defaultCombo": "combo-coding",
   "allowedCombos": [
     "combo-testing",
@@ -219,8 +218,8 @@ Caminhos exclusivos: integração de workspace, terminal e diagnóstico.
 
 Entregas:
 
-- abrir `%USERPROFILE%\workspace` no primeiro uso;
-- respeitar workspace escolhido no instalador;
+- abrir sem workspace obrigatório no primeiro uso;
+- respeitar as pastas abertas em cada janela;
 - validar Git, `gh`, Node, Python e compiladores;
 - reutilizar PATH e ambiente do usuário;
 - comandos de diagnóstico não destrutivos;
@@ -267,7 +266,7 @@ Entregas:
 - escrita atômica de `current.json`;
 - criar atalhos `.lnk` com ícone próprio;
 - preservar versão anterior para rollback;
-- configurar workspace, endpoint e variável AppKey;
+- configurar endpoint e variável AppKey;
 - incluir Achilles no `omni doctor`.
 
 Aceite:

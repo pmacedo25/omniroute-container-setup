@@ -485,15 +485,6 @@ function Install-OmniCommand {
     }
 }
 
-function ConvertTo-PodmanMachinePath {
-    param([string]$WindowsPath)
-    $normalized = $WindowsPath -replace "\\", "/"
-    if ($normalized -match "^([A-Za-z]):/(.*)$") {
-        return "/mnt/$($Matches[1].ToLower())/$($Matches[2])"
-    }
-    return $normalized
-}
-
 function Remove-UnmanagedPodmanContainer {
     param([string]$ContainerName, [string]$ExpectedComposeProject)
     & podman container exists $ContainerName
@@ -560,7 +551,6 @@ function Invoke-OmniRouteSetup {
         [string]$SetupDirectory,
         [string]$SkillsRepository,
         [string]$SkillsBranch,
-        [string]$ProjectsPath,
         [int]$Port,
         [string]$AchillesRepository,
         [string]$AchillesVersion,
@@ -582,7 +572,8 @@ function Invoke-OmniRouteSetup {
         "OPENHANDS_SETTINGS_FILE",
         "SANDBOX_VOLUMES",
         "GITHUB_TOKEN",
-        "CONTAINER_SOCKET"
+        "CONTAINER_SOCKET",
+        "PROJECTS_DIR"
     )
     Set-EnvValue $envPath "PORT" ([string]$Port)
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_REPO" $SkillsRepository
@@ -591,14 +582,6 @@ function Invoke-OmniRouteSetup {
     if ($needsGitHubAuthentication) {
         Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive | Out-Null
     }
-    if ([string]::IsNullOrWhiteSpace($ProjectsPath)) {
-        $ProjectsPath = Join-Path $homeDirectory "workspace"
-    }
-    $expandedProjectsPath = [Environment]::ExpandEnvironmentVariables($ProjectsPath)
-    $projectsDirectory = [IO.Path]::GetFullPath($expandedProjectsPath)
-    New-Item -ItemType Directory -Path $projectsDirectory -Force | Out-Null
-    $normalizedProjects = $projectsDirectory -replace "\\", "/"
-    Set-EnvValue $envPath "PROJECTS_DIR" $normalizedProjects
     Write-SetupMessage "Preparando o modo $Mode. Reexecuções preservam banco, APPKEY e configurações."
     if ($Mode -eq "container") {
         New-Item -ItemType File -Path (Join-Path $stateDirectory "mode.container") -Force | Out-Null
@@ -620,7 +603,7 @@ function Invoke-OmniRouteSetup {
 
     if (-not $SkipAchilles) {
         $achillesInstallation = Install-Achilles -HomeDirectory $homeDirectory `
-            -ProjectsDirectory $projectsDirectory -OmniRoutePort $Port `
+            -OmniRoutePort $Port `
             -Repository $AchillesRepository -Version $AchillesVersion `
             -ArtifactPath $AchillesArtifactPath `
             -FallbackIconPath (Join-Path $SetupDirectory "design\achilles\achilles.ico")
@@ -638,4 +621,4 @@ function Invoke-OmniRouteSetup {
     Write-SetupMessage "OmniRoute disponível em $baseUrl; configuração concluída." "OK"
 }
 
-Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Sync-SkillsRepository, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-DefaultCombos, Get-PathWithEntry, ConvertTo-PodmanMachinePath, Invoke-OmniRouteSetup
+Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Sync-SkillsRepository, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-DefaultCombos, Get-PathWithEntry, Invoke-OmniRouteSetup
