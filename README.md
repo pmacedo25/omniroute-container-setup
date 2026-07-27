@@ -22,16 +22,19 @@ Modo assistido:
 .\setup-interativo.ps1
 ```
 
-Nesse modo o instalador pergunta a raiz local dos projetos e a URL do
-repositório GitHub de skills. Pressionar Enter usa (e cria quando necessário)
-`%USERPROFILE%\workspace`. Os projetos ficam diretamente dentro dessa pasta,
-sem uma subpasta `projects`. Conversas e configurações do OpenHands ficam
-separadas em `%USERPROFILE%\.openhands`.
+Nesse modo o instalador pergunta a raiz local dos projetos e exige a URL do
+repositório GitHub de skills, sem preencher um repositório padrão. Pressionar
+Enter usa (e cria quando necessário) `%USERPROFILE%\workspace` somente para a
+pasta de projetos. Os projetos ficam diretamente dentro dessa pasta, sem uma
+subpasta `projects`. Conversas e configurações do OpenHands ficam separadas em
+`%USERPROFILE%\.openhands`.
 
 Modo automático em contêiner:
 
 ```powershell
-.\setup-interativo.ps1 -Mode container -NonInteractive -SkipProviderLogin
+.\setup-interativo.ps1 -Mode container -NonInteractive `
+  -SkillsRepository "https://github.com/sua-organizacao/seu-repositorio-skills.git" `
+  -SkipProviderLogin
 ```
 
 Modo local:
@@ -49,7 +52,7 @@ Parâmetros úteis:
 - `-SkipAchilles` para manter os clientes antigos sem instalar a nova IDE
 - `-AchillesVersion <semver|latest>`
 - `-AchillesArtifactPath <zip>` para validar um build local sem GitHub
-- `-NonInteractive` para CI/provisionamento
+- `-NonInteractive` para CI/provisionamento; exige `-SkillsRepository`
 
 A autenticação OAuth dos provedores continua dependendo do consentimento no
 navegador. Todo o restante, incluindo APPKEY, três combos, persistência,

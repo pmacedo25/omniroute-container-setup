@@ -51,18 +51,18 @@ if ([string]::IsNullOrWhiteSpace($ProjectsPath)) {
     }
 }
 
-$defaultSkillsRepository = "https://github.com/pmacedo25/project-agents-templates.git"
 if ([string]::IsNullOrWhiteSpace($SkillsRepository)) {
     if ($NonInteractive) {
-        $SkillsRepository = $defaultSkillsRepository
+        throw "O parâmetro -SkillsRepository é obrigatório no modo não interativo."
     } else {
-        Write-Host "Informe a URL Git do repositório de skills"
-        $repositoryInput = Read-Host "URL (padrão: $defaultSkillsRepository)"
-        $SkillsRepository = if ([string]::IsNullOrWhiteSpace($repositoryInput)) {
-            $defaultSkillsRepository
-        } else {
-            $repositoryInput.Trim()
-        }
+        do {
+            Write-Host "Informe a URL Git do repositório de skills (obrigatório)"
+            $repositoryInput = Read-Host "URL"
+            $SkillsRepository = $repositoryInput.Trim()
+            if ([string]::IsNullOrWhiteSpace($SkillsRepository)) {
+                Write-Host "A URL do repositório de skills não pode ficar vazia." -ForegroundColor Yellow
+            }
+        } while ([string]::IsNullOrWhiteSpace($SkillsRepository))
     }
 }
 
