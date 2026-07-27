@@ -210,11 +210,11 @@ function Install-OpenRouterAI {
     $versionDirectory = Join-Path $installRoot $resolvedVersion
     $stagingDirectory = Join-Path $installRoot ".staging-$resolvedVersion"
 
-    $installedExecutables = if (Test-Path -LiteralPath $versionDirectory) {
+    $installedExecutables = @(if (Test-Path -LiteralPath $versionDirectory) {
         @(Get-ChildItem -LiteralPath $versionDirectory -Recurse -Filter "OpenRouterAI.exe" -File)
     } else {
         @()
-    }
+    })
     if ($installedExecutables.Count -eq 1) {
         $executablePath = $installedExecutables[0].FullName
     } else {

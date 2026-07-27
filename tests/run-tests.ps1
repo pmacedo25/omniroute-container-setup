@@ -79,6 +79,7 @@ try {
 
     $setupSource = Get-Content (Join-Path $projectDirectory "setup-interativo.ps1") -Raw
     $moduleSource = Get-Content (Join-Path $projectDirectory "scripts\OmniRoute.Setup.psm1") -Raw
+    $openRouterModuleSource = Get-Content (Join-Path $projectDirectory "scripts\OpenRouterAI.Setup.psm1") -Raw
     $composeSource = Get-Content (Join-Path $projectDirectory "docker-compose.yml") -Raw
     Assert-True ($moduleSource -notmatch "taskkill\s+/F\s+/IM\s+node") "Não pode encerrar todos os processos Node"
     Assert-True ($moduleSource -notmatch "Remove-Item.+sqlite") "Reexecução não pode apagar SQLite"
@@ -126,6 +127,7 @@ try {
     Assert-True ($moduleSource -match 'Set-TokenEfficiencyDefaults') "Setup deve aplicar otimizações de tokens"
     Assert-True ($moduleSource -match 'Install-OpenRouterAI') "Setup deve instalar OpenRouterAI nos dois modos"
     Assert-True ($setupSource -match 'OpenRouterAIArtifactPath') "Setup deve aceitar artefato local para validação"
+    Assert-True ($openRouterModuleSource -match '\$installedExecutables = @\(if') "Reexecução com um executável deve preservar sem erro de Count"
     $omniSource = Get-Content (Join-Path $projectDirectory "scripts\omni.ps1") -Raw
     Assert-True ($omniSource -match '"ide"') "Comando omni deve abrir a IDE"
     Assert-True ($omniSource -match '\.openrouterai\\current\.json') "Doctor deve diagnosticar a IDE"
