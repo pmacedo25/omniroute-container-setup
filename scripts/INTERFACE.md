@@ -18,7 +18,7 @@ rodar localmente ou em contêiner.
 
 ### `Achilles.Setup.psm1`
 
-- Baixar release privado ou consumir ZIP local.
+- Baixar release público do repositório de binários ou consumir ZIP local.
 - Validar arquitetura, SemVer e SHA-256.
 - Instalar lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
 - Gravar configuração sem segredo em `%USERPROFILE%\.achilles`.

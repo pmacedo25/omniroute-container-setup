@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $script:AchillesConfigSchemaVersion = 2
-$script:AchillesDefaultRepository = "pmacedo25/Achilles"
+$script:AchillesDefaultRepository = "pmacedo25/Achilles-Releases"
 $script:AchillesLegacyStateDirectoryName = ".openrouterai"
 $script:AchillesStateDirectoryName = ".achilles"
 $script:AchillesLegacyProductName = "OpenRouterAI"
@@ -104,54 +104,44 @@ function Get-AchillesRelease {
         [string]$Version,
         [string]$Destination
     )
-    $gh = Get-Command gh -ErrorAction SilentlyContinue
-    if (-not $gh) {
-        throw "GitHub CLI é necessário para baixar o release privado do Achilles."
-    }
-    & $gh.Source auth status *> $null
-    if ($LASTEXITCODE -ne 0) {
-        throw "GitHub CLI não está autenticado. Execute 'gh auth login --git-protocol https --web' e reexecute."
-    }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    $releaseViewArguments = @(
-        "release", "view", "--repo", $Repository,
-        "--json", "tagName,assets"
-    )
-    if (-not [string]::IsNullOrWhiteSpace($Version) -and $Version -ne "latest") {
-        $releaseViewArguments += $Version
+    $headers = @{
+        Accept = "application/vnd.github+json"
+        "User-Agent" = "OmniRoute-Setup"
     }
-    $releaseJson = & $gh.Source @releaseViewArguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Não foi possível consultar o release '$Version' de '$Repository'."
+    $releaseEndpoint = if ([string]::IsNullOrWhiteSpace($Version) -or $Version -eq "latest") {
+        "https://api.github.com/repos/$Repository/releases/latest"
+    } else {
+        $tag = if ($Version.StartsWith("v")) { $Version } else { "v$Version" }
+        "https://api.github.com/repos/$Repository/releases/tags/$([uri]::EscapeDataString($tag))"
     }
-    $release = $releaseJson | ConvertFrom-Json
+    try {
+        $release = Invoke-RestMethod -Uri $releaseEndpoint -Headers $headers -Method Get
+    } catch {
+        throw "Não foi possível consultar o release público '$Version' de '$Repository': $($_.Exception.Message)"
+    }
     $artifactAssets = @($release.assets | Where-Object {
         $_.name -match "^Achilles-win-x64-\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?\.zip$"
     })
     if ($artifactAssets.Count -eq 0) {
         $availableNames = @($release.assets | ForEach-Object { $_.name }) -join ", "
-        throw "O release '$($release.tagName)' não contém um build Achilles para Windows x64. Artefatos disponíveis: $availableNames. Publique uma build validada ou informe -AchillesArtifactPath."
+        throw "O release '$($release.tag_name)' não contém um build Achilles para Windows x64. Artefatos disponíveis: $availableNames. Publique uma build validada ou informe -AchillesArtifactPath."
     }
     if ($artifactAssets.Count -gt 1) {
         $matchingNames = @($artifactAssets | ForEach-Object { $_.name }) -join ", "
-        throw "O release '$($release.tagName)' contém builds Achilles duplicadas para Windows x64: $matchingNames."
+        throw "O release '$($release.tag_name)' contém builds Achilles duplicadas para Windows x64: $matchingNames."
+    }
+    $assetsToDownload = @($artifactAssets[0])
+    $assetsToDownload += @($release.assets | Where-Object { $_.name -in @("release-manifest.json", "SHA256SUMS") })
+    foreach ($asset in $assetsToDownload) {
+        $destinationPath = Join-Path $Destination $asset.name
+        try {
+            Invoke-WebRequest -Uri $asset.browser_download_url -Headers $headers -OutFile $destinationPath -UseBasicParsing
+        } catch {
+            throw "Falha ao baixar '$($asset.name)' do release '$($release.tag_name)': $($_.Exception.Message)"
+        }
     }
     $artifactName = $artifactAssets[0].name
-    $arguments = @(
-        "release", "download", "--repo", $Repository,
-        "--pattern", $artifactName,
-        "--pattern", "release-manifest.json",
-        "--pattern", "SHA256SUMS",
-        "--dir", $Destination,
-        "--clobber"
-    )
-    if (-not [string]::IsNullOrWhiteSpace($Version) -and $Version -ne "latest") {
-        $arguments += $Version
-    }
-    & $gh.Source @arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Falha ao baixar o release '$Version' de '$Repository'."
-    }
     $artifactPath = Join-Path $Destination $artifactName
     if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
         throw "O download terminou sem criar o artefato esperado '$artifactName'."

@@ -112,7 +112,7 @@ de runtime.
 ## Achilles
 
 O Achilles é instalado nos modos container e local em escopo de usuário,
-sem UAC. O setup baixa o release privado com GitHub CLI, valida o SHA-256 e
+sem UAC. O setup baixa o release público do repositório exclusivo de binários, valida o SHA-256 e
 extrai versões lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
 
 Projetos permanecem em `%USERPROFILE%\workspace` (ou `-ProjectsPath`) e a
