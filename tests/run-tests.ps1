@@ -148,6 +148,8 @@ try {
     Assert-True ($achillesModuleSource -notmatch 'ProjectsDirectory') "Launcher não deve impor uma pasta padrão"
     Assert-True ($achillesModuleSource -match 'IsNullOrWhiteSpace\(`\$_\)') "Launcher deve ignorar argumentos vazios do PowerShell 5"
     Assert-True ($achillesModuleSource -match 'launcher-error\.log') "Falhas ocultas do launcher devem deixar diagnóstico"
+    Assert-True ($achillesModuleSource -match 'System32\\wscript\.exe') "Atalhos devem abrir sem janela de terminal"
+    Assert-True ($achillesModuleSource -match 'GraphicalLauncher') "Instalação deve validar o launcher gráfico"
     Assert-True ($setupSource -match 'AchillesArtifactPath') "Setup deve aceitar artefato local para validação"
     Assert-True ($setupSource -match 'Alias\("OpenRouterAIArtifactPath"\)') "Automação anterior deve continuar aceita durante a migração"
     Assert-True ($achillesModuleSource -match '\$installedExecutables = @\(if') "Reexecução com um executável deve preservar sem erro de Count"

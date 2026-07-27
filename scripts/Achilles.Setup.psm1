@@ -225,6 +225,18 @@ try {
 }
 "@
     Set-Content -LiteralPath $launcherPath -Value $launcher -Encoding utf8
+    $graphicalLauncherPath = [IO.Path]::ChangeExtension($launcherPath, ".vbs")
+    $escapedPowerShellPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe".Replace('"', '""')
+    $escapedLauncherPath = $launcherPath.Replace('"', '""')
+    $graphicalLauncher = @"
+Set shell = CreateObject("WScript.Shell")
+command = """$escapedPowerShellPath"" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$escapedLauncherPath"""
+For Each argument In WScript.Arguments
+    command = command & " """ & Replace(argument, """", """""") & """"
+Next
+shell.Run command, 0, False
+"@
+    Set-Content -LiteralPath $graphicalLauncherPath -Value $graphicalLauncher -Encoding ascii
     return $launcherPath
 }
 
@@ -263,21 +275,22 @@ function Install-AchillesCommand {
 function New-AchillesShortcuts {
     param(
         [string]$LauncherPath,
+        [string]$GraphicalLauncherPath,
         [string]$IconPath,
         [string]$WorkingDirectory
     )
     $desktopDirectory = [Environment]::GetFolderPath("Desktop")
     $startMenuDirectory = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
     New-Item -ItemType Directory -Path $startMenuDirectory -Force | Out-Null
-    $powerShellPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+    $wscriptPath = "$env:SystemRoot\System32\wscript.exe"
     $shell = New-Object -ComObject WScript.Shell
     foreach ($shortcutPath in @(
         (Join-Path $desktopDirectory "Achilles.lnk"),
         (Join-Path $startMenuDirectory "Achilles.lnk")
     )) {
         $shortcut = $shell.CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = $powerShellPath
-        $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`""
+        $shortcut.TargetPath = $wscriptPath
+        $shortcut.Arguments = "`"$GraphicalLauncherPath`""
         $shortcut.WorkingDirectory = $WorkingDirectory
         $shortcut.WindowStyle = 1
         $shortcut.IconLocation = "$IconPath,0"
@@ -376,9 +389,11 @@ function Install-Achilles {
     }
     $launcherPath = New-AchillesLauncher -HomeDirectory $HomeDirectory `
         -InstallRoot $installRoot
+    $graphicalLauncherPath = [IO.Path]::ChangeExtension($launcherPath, ".vbs")
     $commandPath = Install-AchillesCommand -HomeDirectory $HomeDirectory `
         -LauncherPath $launcherPath
-    $shortcutPaths = @(New-AchillesShortcuts -LauncherPath $launcherPath -IconPath $iconPath `
+    $shortcutPaths = @(New-AchillesShortcuts -LauncherPath $launcherPath `
+        -GraphicalLauncherPath $graphicalLauncherPath -IconPath $iconPath `
         -WorkingDirectory $HomeDirectory
     )
     Write-AchillesMessage "Achilles $resolvedVersion instalado sem elevação." "OK"
@@ -391,6 +406,7 @@ function Install-Achilles {
         Executable = $executablePath
         Config = $configPath
         Launcher = $launcherPath
+        GraphicalLauncher = $graphicalLauncherPath
         Command = $commandPath
         Shortcuts = $shortcutPaths
     }
@@ -410,6 +426,9 @@ function Test-AchillesInstallation {
     }
     if (-not (Test-Path -LiteralPath $Installation.Launcher -PathType Leaf)) {
         throw "A instalação do Achilles não criou o launcher esperado: $($Installation.Launcher)"
+    }
+    if (-not (Test-Path -LiteralPath $Installation.GraphicalLauncher -PathType Leaf)) {
+        throw "A instalação do Achilles não criou o launcher gráfico esperado: $($Installation.GraphicalLauncher)"
     }
     if (-not (Test-Path -LiteralPath $Installation.Command -PathType Leaf)) {
         throw "A instalação do Achilles não criou o comando esperado: $($Installation.Command)"
