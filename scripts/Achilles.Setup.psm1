@@ -197,6 +197,7 @@ function New-AchillesLauncher {
     $stateDirectory = Join-Path $HomeDirectory ".achilles"
     $launcherPath = Join-Path $stateDirectory "Achilles.ps1"
     $launcher = @"
+param([Parameter(ValueFromRemainingArguments = `$true)][string[]]`$WorkspaceArguments)
 `$ErrorActionPreference = "Stop"
 `$stateDirectory = "$stateDirectory"
 `$current = Get-Content -LiteralPath (Join-Path `$stateDirectory "current.json") -Raw | ConvertFrom-Json
@@ -210,10 +211,47 @@ if (-not (Test-Path -LiteralPath `$executable -PathType Leaf)) {
 }
 `$env:ACHILLES_CONFIG = Join-Path `$stateDirectory "config.json"
 `$env:OPENAI_API_KEY = `$env:OMNIROUTE_API_KEY
-Start-Process -FilePath `$executable -ArgumentList @("$ProjectsDirectory")
+`$arguments = if (@(`$WorkspaceArguments).Count -gt 0) {
+    @(`$WorkspaceArguments)
+} else {
+    @("$ProjectsDirectory")
+}
+Start-Process -FilePath `$executable -ArgumentList `$arguments
 "@
     Set-Content -LiteralPath $launcherPath -Value $launcher -Encoding utf8
     return $launcherPath
+}
+
+function Install-AchillesCommand {
+    param(
+        [string]$HomeDirectory,
+        [string]$LauncherPath
+    )
+    $commandDirectory = Join-Path $HomeDirectory ".omniroute\bin"
+    New-Item -ItemType Directory -Path $commandDirectory -Force | Out-Null
+    $commandPath = Join-Path $commandDirectory "achilles.cmd"
+    $command = @"
+@echo off
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$LauncherPath" %*
+"@
+    Set-Content -LiteralPath $commandPath -Value $command -Encoding ascii
+
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $pathEntries = @($userPath -split ";" | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_)
+    })
+    if (@($pathEntries | Where-Object {
+        $_.TrimEnd("\") -ieq $commandDirectory.TrimEnd("\")
+    }).Count -eq 0) {
+        $updatedPath = (@($pathEntries) + $commandDirectory) -join ";"
+        [Environment]::SetEnvironmentVariable("Path", $updatedPath, "User")
+    }
+    if (@($env:PATH -split ";" | Where-Object {
+        $_.TrimEnd("\") -ieq $commandDirectory.TrimEnd("\")
+    }).Count -eq 0) {
+        $env:PATH = "$commandDirectory;$env:PATH"
+    }
+    return $commandPath
 }
 
 function New-AchillesShortcuts {
@@ -247,6 +285,10 @@ function New-AchillesShortcuts {
     )) {
         Remove-Item -LiteralPath $legacyShortcutPath -Force -ErrorAction SilentlyContinue
     }
+    return @(
+        (Join-Path $desktopDirectory "Achilles.lnk"),
+        (Join-Path $startMenuDirectory "Achilles.lnk")
+    )
 }
 
 function Install-Achilles {
@@ -329,8 +371,11 @@ function Install-Achilles {
     }
     $launcherPath = New-AchillesLauncher -HomeDirectory $HomeDirectory `
         -InstallRoot $installRoot -ProjectsDirectory $ProjectsDirectory
-    New-AchillesShortcuts -LauncherPath $launcherPath -IconPath $iconPath `
+    $commandPath = Install-AchillesCommand -HomeDirectory $HomeDirectory `
+        -LauncherPath $launcherPath
+    $shortcutPaths = @(New-AchillesShortcuts -LauncherPath $launcherPath -IconPath $iconPath `
         -WorkingDirectory $ProjectsDirectory
+    )
     Write-AchillesMessage "Achilles $resolvedVersion instalado sem elevação." "OK"
     if ($legacyStateMigrated) {
         Write-AchillesMessage "Configurações do OpenRouterAI foram copiadas; o estado original foi preservado para rollback." "OK"
@@ -341,6 +386,8 @@ function Install-Achilles {
         Executable = $executablePath
         Config = $configPath
         Launcher = $launcherPath
+        Command = $commandPath
+        Shortcuts = $shortcutPaths
     }
 }
 
@@ -359,6 +406,22 @@ function Test-AchillesInstallation {
     if (-not (Test-Path -LiteralPath $Installation.Launcher -PathType Leaf)) {
         throw "A instalação do Achilles não criou o launcher esperado: $($Installation.Launcher)"
     }
+    if (-not (Test-Path -LiteralPath $Installation.Command -PathType Leaf)) {
+        throw "A instalação do Achilles não criou o comando esperado: $($Installation.Command)"
+    }
+    if (@($Installation.Shortcuts).Count -ne 2 -or
+        @($Installation.Shortcuts | Where-Object {
+            -not (Test-Path -LiteralPath $_ -PathType Leaf)
+        }).Count -gt 0) {
+        throw "A instalação do Achilles não criou os atalhos do Desktop e Menu Iniciar."
+    }
+    $commandDirectory = Split-Path -Parent $Installation.Command
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if (@($userPath -split ";" | Where-Object {
+        $_.TrimEnd("\") -ieq $commandDirectory.TrimEnd("\")
+    }).Count -eq 0) {
+        throw "O diretório do comando Achilles não foi incluído no PATH do usuário."
+    }
     if (-not (Test-Path -LiteralPath $currentPath -PathType Leaf)) {
         throw "A instalação do Achilles não registrou a versão ativa."
     }
@@ -371,4 +434,4 @@ function Test-AchillesInstallation {
     return $true
 }
 
-Export-ModuleMember -Function Write-AchillesConfiguration, Copy-AchillesLegacyState, Test-AchillesArtifact, Get-AchillesVersion, Install-Achilles, Test-AchillesInstallation
+Export-ModuleMember -Function Write-AchillesConfiguration, Copy-AchillesLegacyState, Test-AchillesArtifact, Get-AchillesVersion, Install-AchillesCommand, Install-Achilles, Test-AchillesInstallation

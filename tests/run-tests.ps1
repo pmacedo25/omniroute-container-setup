@@ -5,6 +5,7 @@ $projectDirectory = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $projectDirectory "scripts\OmniRoute.Setup.psm1") -Force -DisableNameChecking
 Import-Module (Join-Path $projectDirectory "scripts\Achilles.Setup.psm1") -Force -DisableNameChecking
 $testRoot = Join-Path $projectDirectory ".test-home"
+$originalUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
 function Assert-True {
     param([bool]$Condition, [string]$Message)
@@ -48,6 +49,18 @@ try {
     Assert-Equal "C:\Tools" (Get-PathWithEntry -CurrentPath $null -Entry "C:\Tools") "PATH nulo deve ser suportado"
     Assert-Equal "C:\Windows;C:\Tools" (Get-PathWithEntry -CurrentPath "C:\Windows" -Entry "C:\Tools") "Entrada deve ser adicionada"
     Assert-Equal "C:\Windows;C:\Tools" (Get-PathWithEntry -CurrentPath "C:\Windows;C:\Tools" -Entry "c:\tools\") "Entrada não pode duplicar"
+
+    $testLauncher = Join-Path $testRoot ".achilles\Achilles.ps1"
+    New-Item -ItemType Directory -Path (Split-Path -Parent $testLauncher) -Force | Out-Null
+    Set-Content -LiteralPath $testLauncher -Value "param()" -Encoding utf8
+    $achillesCommand = Install-AchillesCommand -HomeDirectory $testRoot -LauncherPath $testLauncher
+    Assert-True (Test-Path -LiteralPath $achillesCommand -PathType Leaf) "Comando achilles deve ser criado"
+    Assert-True ((Get-Content -LiteralPath $achillesCommand -Raw) -match '%\*') "Comando deve encaminhar argumentos"
+    Assert-True (@([Environment]::GetEnvironmentVariable("Path", "User") -split ";" |
+        Where-Object { $_ -ieq (Split-Path -Parent $achillesCommand) }).Count -eq 1) "Comando deve entrar no PATH do usuário uma única vez"
+    Install-AchillesCommand -HomeDirectory $testRoot -LauncherPath $testLauncher | Out-Null
+    Assert-True (@([Environment]::GetEnvironmentVariable("Path", "User") -split ";" |
+        Where-Object { $_ -ieq (Split-Path -Parent $achillesCommand) }).Count -eq 1) "Reexecução não pode duplicar PATH"
 
     $achillesConfig = Write-AchillesConfiguration -HomeDirectory $testRoot `
         -ProjectsDirectory "C:\Users\test\workspace" -OmniRoutePort 20128
@@ -129,6 +142,8 @@ try {
     Assert-True ($moduleSource -match 'Set-TokenEfficiencyDefaults') "Setup deve aplicar otimizações de tokens"
     Assert-True ($moduleSource -match 'Test-AchillesInstallation') "Setup deve validar o Achilles após instalar"
     Assert-True ($moduleSource -match 'Install-Achilles') "Setup deve instalar Achilles nos dois modos"
+    Assert-True ($achillesModuleSource -match 'Microsoft\\Windows\\Start Menu\\Programs') "Achilles deve ser localizado pela pesquisa do Windows"
+    Assert-True ($achillesModuleSource -match 'achilles\.cmd') "Setup deve criar o comando achilles"
     Assert-True ($setupSource -match 'AchillesArtifactPath') "Setup deve aceitar artefato local para validação"
     Assert-True ($setupSource -match 'Alias\("OpenRouterAIArtifactPath"\)') "Automação anterior deve continuar aceita durante a migração"
     Assert-True ($achillesModuleSource -match '\$installedExecutables = @\(if') "Reexecução com um executável deve preservar sem erro de Count"
@@ -158,5 +173,6 @@ try {
 
     Write-Host "PASS: todos os testes foram aprovados." -ForegroundColor Green
 } finally {
+    [Environment]::SetEnvironmentVariable("Path", $originalUserPath, "User")
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }

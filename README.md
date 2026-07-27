@@ -88,6 +88,10 @@ de runtime.
 O Achilles é instalado nos modos container e local em escopo de usuário,
 sem UAC. O setup baixa o release público do repositório exclusivo de binários, valida o SHA-256 e
 extrai versões lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
+Também cria o comando estável `achilles` em `%USERPROFILE%\.omniroute\bin`,
+inclui esse diretório no PATH do usuário e registra atalhos na Área de Trabalho
+e no Menu Iniciar. Assim, um novo terminal pode executar `achilles` e a pesquisa
+do Windows encontra o aplicativo sem MSI ou permissões administrativas.
 
 Projetos permanecem em `%USERPROFILE%\workspace` (ou `-ProjectsPath`) e a
 configuração fica em `%USERPROFILE%\.achilles`. A AppKey não é duplicada no
