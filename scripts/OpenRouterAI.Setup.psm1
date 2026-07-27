@@ -259,6 +259,7 @@ function Install-OpenRouterAI {
     New-OpenRouterAIShortcuts -LauncherPath $launcherPath -IconPath $iconPath `
         -WorkingDirectory $ProjectsDirectory
     Write-OpenRouterAIMessage "OpenRouterAI $resolvedVersion instalado sem elevação." "OK"
+    Write-OpenRouterAIMessage "Na primeira abertura, confirme a confiança no workspace para habilitar agentes, tarefas e ferramentas." "INFO"
     return [pscustomobject]@{
         Version = $resolvedVersion
         Executable = $executablePath
