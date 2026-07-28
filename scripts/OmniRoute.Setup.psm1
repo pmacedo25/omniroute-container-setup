@@ -491,7 +491,7 @@ function Invoke-CorporateCAInjection {
 
     $caDestination = Join-Path $SetupDirectory "skills-sync\netskope-ca.pem"
 
-    # Known SSL-inspection vendors — extend as needed
+    # Known SSL-inspection vendors — Root (trusted anchors) + CA (intermediates) stores
     $inspectionPatterns = @(
         "*Netskope*", "*goskope*",
         "*Zscaler*",
@@ -501,25 +501,35 @@ function Invoke-CorporateCAInjection {
         "*Symantec Web*"
     )
 
-    $found = $null
+    $seen  = @{}
+    $certs = @()
     foreach ($storeLocation in @("LocalMachine", "CurrentUser")) {
-        $store = "Cert:\$storeLocation\Root"
-        foreach ($pattern in $inspectionPatterns) {
-            $cert = Get-ChildItem $store -ErrorAction SilentlyContinue |
-                Where-Object { $_.Subject -like $pattern -or $_.Issuer -like $pattern } |
-                Select-Object -First 1
-            if ($cert) { $found = $cert; break }
+        foreach ($storeName in @("Root", "CA")) {
+            $store = "Cert:\$storeLocation\$storeName"
+            foreach ($pattern in $inspectionPatterns) {
+                Get-ChildItem $store -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Subject -like $pattern -or $_.Issuer -like $pattern } |
+                    ForEach-Object {
+                        if (-not $seen.ContainsKey($_.Thumbprint)) {
+                            $seen[$_.Thumbprint] = $true
+                            $certs += $_
+                        }
+                    }
+            }
         }
-        if ($found) { break }
     }
 
-    if ($found) {
-        $vendor = if ($found.Subject -match "O=([^,]+)") { $Matches[1].Trim() } else { $found.Subject }
-        $pem = "-----BEGIN CERTIFICATE-----`n" +
-               [Convert]::ToBase64String($found.RawData, [Base64FormattingOptions]::InsertLineBreaks) +
-               "`n-----END CERTIFICATE-----"
+    if ($certs.Count -gt 0) {
+        $vendors = ($certs | ForEach-Object {
+            if ($_.Subject -match "O=([^,]+)") { $Matches[1].Trim() } else { $_.Subject }
+        } | Select-Object -Unique) -join ", "
+        $pem = ($certs | ForEach-Object {
+            "-----BEGIN CERTIFICATE-----`n" +
+            [Convert]::ToBase64String($_.RawData, [Base64FormattingOptions]::InsertLineBreaks) +
+            "`n-----END CERTIFICATE-----"
+        }) -join "`n"
         [System.IO.File]::WriteAllText($caDestination, $pem)
-        Write-SetupMessage "CA de inspeção SSL detectado ($vendor). Será injetado no build do container." "OK"
+        Write-SetupMessage "Cadeia SSL corporativa detectada ($($certs.Count) certs: $vendors). Injetada no container." "OK"
     } else {
         # Empty file keeps the Dockerfile COPY valid on environments without SSL inspection
         [System.IO.File]::WriteAllText($caDestination, "")
