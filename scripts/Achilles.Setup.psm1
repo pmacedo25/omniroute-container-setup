@@ -39,7 +39,7 @@ function Write-AchillesConfiguration {
         omnirouteCatalogUrl = "http://127.0.0.1:$OmniRoutePort/v1/models"
         apiKeyEnvironmentVariable = "OMNIROUTE_API_KEY"
         modelSelection = "dynamic"
-        configuredProvidersOnly = $true
+        configuredProvidersOnly = $false
         telemetry = $false
     }
     $configPath = Join-Path $stateDirectory "config.json"
@@ -47,6 +47,32 @@ function Write-AchillesConfiguration {
     $configuration | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $temporaryPath -Encoding utf8
     Move-Item -LiteralPath $temporaryPath -Destination $configPath -Force
     return $configPath
+}
+
+function Write-AchillesSettings {
+    param(
+        [string]$HomeDirectory,
+        [int]$OmniRoutePort
+    )
+    $stateDirectory = Join-Path $HomeDirectory $script:AchillesStateDirectoryName
+    New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
+    $baseUrl = "http://127.0.0.1:$OmniRoutePort/v1"
+    $apiKey = $env:OMNIROUTE_API_KEY
+    $models = @(
+        [ordered]@{ id = "combo-coding"; name = "combo-coding"; url = $baseUrl; apiKey = $apiKey; enableStreaming = $true },
+        [ordered]@{ id = "combo-refining"; name = "combo-refining"; url = $baseUrl; apiKey = $apiKey; enableStreaming = $true },
+        [ordered]@{ id = "combo-testing"; name = "combo-testing"; url = $baseUrl; apiKey = $apiKey; enableStreaming = $true }
+    )
+    $settings = [ordered]@{
+        "ai-features.chat.bypassModelRequirement" = $true
+        "ai-features.chat.toolConfirmation" = [ordered]@{}
+        "ai-features.openAiCustom.customOpenAiModels" = $models
+    }
+    $settingsPath = Join-Path $stateDirectory "settings.json"
+    $temporaryPath = "$settingsPath.new"
+    $settings | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $temporaryPath -Encoding utf8
+    Move-Item -LiteralPath $temporaryPath -Destination $settingsPath -Force
+    return $settingsPath
 }
 
 function Copy-AchillesLegacyState {
@@ -371,6 +397,7 @@ function Install-Achilles {
 
     $configPath = Write-AchillesConfiguration -HomeDirectory $HomeDirectory `
         -OmniRoutePort $OmniRoutePort
+    Write-AchillesSettings -HomeDirectory $HomeDirectory -OmniRoutePort $OmniRoutePort | Out-Null
     $currentPath = Join-Path $stateDirectory "current.json"
     $currentTemporaryPath = "$currentPath.new"
     [ordered]@{
@@ -451,11 +478,11 @@ function Test-AchillesInstallation {
     }
     $configuration = Get-Content -LiteralPath $Installation.Config -Raw | ConvertFrom-Json
     if ($configuration.modelSelection -ne "dynamic" -or
-        $configuration.configuredProvidersOnly -ne $true -or
+        $configuration.configuredProvidersOnly -ne $false -or
         $configuration.apiKeyEnvironmentVariable -ne "OMNIROUTE_API_KEY") {
         throw "A configuração do Achilles não atende ao contrato OmniRoute."
     }
     return $true
 }
 
-Export-ModuleMember -Function Write-AchillesConfiguration, Copy-AchillesLegacyState, Test-AchillesArtifact, Get-AchillesVersion, Install-AchillesCommand, Install-Achilles, Test-AchillesInstallation
+Export-ModuleMember -Function Write-AchillesConfiguration, Write-AchillesSettings, Copy-AchillesLegacyState, Test-AchillesArtifact, Get-AchillesVersion, Install-AchillesCommand, Install-Achilles, Test-AchillesInstallation
