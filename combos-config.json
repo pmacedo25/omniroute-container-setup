@@ -6,9 +6,9 @@
       "description": "Fluxo diário de programação, equilibrando qualidade, latência e custo.",
       "strategy": "priority",
       "models": [
-        "antigravity/gemini-3.1-pro-low",
-        "codex/gpt-5.5-medium",
-        "antigravity/claude-sonnet-4-6"
+        "github/gpt-5.3-codex",
+        "claude/claude-sonnet-4-6",
+        "github/claude-sonnet-4.6"
       ],
       "context_cache_protection": true,
       "context_length": 272000,
@@ -27,9 +27,9 @@
       "description": "Arquitetura, revisão e raciocínio profundo.",
       "strategy": "priority",
       "models": [
-        "codex/gpt-5.5-high",
-        "antigravity/claude-sonnet-4-6",
-        "antigravity/gemini-3.1-pro-high"
+        "claude/claude-sonnet-5",
+        "claude/claude-sonnet-4-6",
+        "github/gpt-5.3-codex"
       ],
       "context_cache_protection": true,
       "context_length": 272000,
@@ -48,9 +48,9 @@
       "description": "Testes, exploração e tarefas rápidas priorizando o menor custo.",
       "strategy": "priority",
       "models": [
-        "antigravity/gemini-3.1-flash-lite",
-        "codex/gpt-5.3-codex-spark",
-        "antigravity/gpt-oss-120b-medium"
+        "github/gpt-4o-mini",
+        "claude/claude-haiku-4-5-20251001",
+        "github/claude-haiku-4.5"
       ],
       "context_cache_protection": true,
       "context_length": 272000,
