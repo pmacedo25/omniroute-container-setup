@@ -334,36 +334,12 @@ function Set-DefaultCombos {
     param([string]$BaseUrl, [string]$ConfigPath, [string]$AppKey)
     $headers = @{ Authorization = "Bearer $AppKey" }
     $configuration = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
-    $availableModels = [System.Collections.Generic.HashSet[string]]::new(
-        [System.StringComparer]::OrdinalIgnoreCase
-    )
-    $providerResponse = Invoke-RestMethod -Uri "$BaseUrl/api/providers" `
-        -Headers $headers -TimeoutSec 20
-    foreach ($connection in @($providerResponse.connections | Where-Object { $_.isActive })) {
-        try {
-            $modelResponse = Invoke-RestMethod `
-                -Uri "$BaseUrl/api/providers/$($connection.id)/models" `
-                -Headers $headers -TimeoutSec 20
-            foreach ($modelItem in @($modelResponse.models)) {
-                [void]$availableModels.Add("$($connection.provider)/$($modelItem.id)")
-            }
-        } catch {
-            Write-SetupMessage "Não foi possível consultar os modelos de '$($connection.provider)': $($_.Exception.Message)" "WARN"
-        }
-    }
-    if ($availableModels.Count -eq 0) {
-        throw "Nenhum provedor de IA ativo foi encontrado no OmniRoute. Conecte um provedor no Dashboard e reexecute o instalador."
-    }
 
     $existingResponse = Invoke-RestMethod -Uri "$BaseUrl/api/combos" -Headers $headers -TimeoutSec 20
     $existingByName = @{}
     foreach ($item in @($existingResponse.combos)) { $existingByName[$item.name] = $item }
 
     foreach ($combo in $configuration.combos) {
-        $combo.models = @($combo.models | Where-Object { $availableModels.Contains([string]$_) })
-        if (@($combo.models).Count -eq 0) {
-            throw "O combo '$($combo.name)' não possui modelos disponíveis nos provedores conectados."
-        }
         $body = $combo | ConvertTo-Json -Depth 20
         if ($existingByName.ContainsKey($combo.name)) {
             Invoke-RestMethod -Uri "$BaseUrl/api/combos/$($existingByName[$combo.name].id)" -Method Put -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec 20 | Out-Null
