@@ -218,7 +218,7 @@ function Test-AppKey {
     param([string]$BaseUrl, [string]$AppKey)
     if ([string]::IsNullOrWhiteSpace($AppKey)) { return $false }
     try {
-        Invoke-RestMethod -Uri "$BaseUrl/v1/models" -Headers @{ Authorization = "Bearer $AppKey" } -TimeoutSec 10 | Out-Null
+        Invoke-RestMethod -Uri "$BaseUrl/api/keys" -Headers @{ Authorization = "Bearer $AppKey" } -TimeoutSec 10 | Out-Null
         return $true
     } catch { return $false }
 }
