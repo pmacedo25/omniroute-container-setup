@@ -14,11 +14,13 @@ services:
       HOSTNAME: 0.0.0.0
       REQUIRE_API_KEY: "true"
       OMNIROUTE_MEMORY_MB: ${OMNIROUTE_MEMORY_MB:-1024}
+      NODE_EXTRA_CA_CERTS: /certs/corporate-ca.pem
     ports:
       - "${PORT:-20128}:${PORT:-20128}"
     volumes:
       - omniroute-data:/app/data
       - omniroute-skills:/app/data/skills:ro
+      - ./skills-sync/netskope-ca.pem:/certs/corporate-ca.pem:ro
     healthcheck:
       test: ["CMD", "node", "healthcheck.mjs"]
       interval: 15s
