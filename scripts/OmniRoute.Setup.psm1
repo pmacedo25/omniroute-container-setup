@@ -485,6 +485,47 @@ function Install-OmniCommand {
     }
 }
 
+function Invoke-CorporateCAInjection {
+    param([string]$SetupDirectory)
+
+    $caDestination = Join-Path $SetupDirectory "skills-sync\netskope-ca.pem"
+
+    # Known SSL-inspection vendors — extend as needed
+    $inspectionPatterns = @(
+        "*Netskope*", "*goskope*",
+        "*Zscaler*",
+        "*Fortinet*", "*FortiGate*",
+        "*Palo Alto*",
+        "*Blue Coat*", "*BlueCoat*",
+        "*Symantec Web*"
+    )
+
+    $found = $null
+    foreach ($storeLocation in @("LocalMachine", "CurrentUser")) {
+        $store = "Cert:\$storeLocation\Root"
+        foreach ($pattern in $inspectionPatterns) {
+            $cert = Get-ChildItem $store -ErrorAction SilentlyContinue |
+                Where-Object { $_.Subject -like $pattern -or $_.Issuer -like $pattern } |
+                Select-Object -First 1
+            if ($cert) { $found = $cert; break }
+        }
+        if ($found) { break }
+    }
+
+    if ($found) {
+        $vendor = if ($found.Subject -match "O=([^,]+)") { $Matches[1].Trim() } else { $found.Subject }
+        $pem = "-----BEGIN CERTIFICATE-----`n" +
+               [Convert]::ToBase64String($found.RawData, [Base64FormattingOptions]::InsertLineBreaks) +
+               "`n-----END CERTIFICATE-----"
+        [System.IO.File]::WriteAllText($caDestination, $pem)
+        Write-SetupMessage "CA de inspeção SSL detectado ($vendor). Será injetado no build do container." "OK"
+    } else {
+        # Empty file keeps the Dockerfile COPY valid on environments without SSL inspection
+        [System.IO.File]::WriteAllText($caDestination, "")
+        Write-SetupMessage "Nenhum CA de inspeção SSL corporativo detectado; build padrão." "INFO"
+    }
+}
+
 function Remove-UnmanagedPodmanContainer {
     param([string]$ContainerName, [string]$ExpectedComposeProject)
     & podman container exists $ContainerName
@@ -586,6 +627,7 @@ function Invoke-OmniRouteSetup {
     if ($Mode -eq "container") {
         New-Item -ItemType File -Path (Join-Path $stateDirectory "mode.container") -Force | Out-Null
         $engine = Ensure-ContainerEngine
+        Invoke-CorporateCAInjection -SetupDirectory $SetupDirectory
         Start-ContainerMode -Engine $engine -SetupDirectory $SetupDirectory
     } else {
         Remove-Item -LiteralPath (Join-Path $stateDirectory "mode.container") -Force -ErrorAction SilentlyContinue

@@ -16,6 +16,9 @@ skills/
 storage/
 data/
 
+# Corporate CA (generated at setup time, machine-specific)
+skills-sync/netskope-ca.pem
+
 # Logs and temporary files
 *.log
 logs/
