@@ -48,7 +48,7 @@
       "description": "Testes, exploração e tarefas rápidas priorizando o menor custo.",
       "strategy": "priority",
       "models": [
-        "github/gpt-4o-mini",
+        "github/gemini-3.1-pro-preview",
         "claude/claude-haiku-4-5-20251001",
         "github/claude-haiku-4.5"
       ],
