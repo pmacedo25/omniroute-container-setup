@@ -620,16 +620,17 @@ function Invoke-OmniRouteSetup {
         "OPENHANDS_HOME_DIR",
         "OPENHANDS_SETTINGS_FILE",
         "SANDBOX_VOLUMES",
-        "GITHUB_TOKEN",
         "CONTAINER_SOCKET",
         "PROJECTS_DIR"
     )
     Set-EnvValue $envPath "PORT" ([string]$Port)
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_REPO" $SkillsRepository
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_BRANCH" $SkillsBranch
-    $needsGitHubAuthentication = $Mode -eq "container"
-    if ($needsGitHubAuthentication) {
-        Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive | Out-Null
+    if ($Mode -eq "container") {
+        $githubToken = Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive
+        if (![string]::IsNullOrWhiteSpace($githubToken)) {
+            Set-EnvValue $envPath "GITHUB_TOKEN" $githubToken
+        }
     }
     Write-SetupMessage "Preparando o modo $Mode. Reexecuções preservam banco, APPKEY e configurações."
     if ($Mode -eq "container") {

@@ -2,10 +2,13 @@ FROM alpine:3.22
 
 # Corporate SSL inspection CA injection (Netskope, Zscaler, Fortinet, etc.)
 # Generated at setup time by Invoke-CorporateCAInjection; no-op when empty.
-COPY netskope-ca.pem /tmp/corporate-ca.pem
-RUN if [ -s /tmp/corporate-ca.pem ]; then \
-        cat /tmp/corporate-ca.pem >> /etc/ssl/certs/ca-certificates.crt; \
-    fi && rm /tmp/corporate-ca.pem
+# Step 1: seed /usr/local/share/ca-certificates/ so update-ca-certificates picks it up after apk.
+# Step 2: also append directly to the Alpine base bundle so apk HTTPS connections work
+#         before the ca-certificates package is installed (apk itself uses this bundle).
+COPY netskope-ca.pem /usr/local/share/ca-certificates/corporate-ca.crt
+RUN if [ -s /usr/local/share/ca-certificates/corporate-ca.crt ]; then \
+        cat /usr/local/share/ca-certificates/corporate-ca.crt >> /etc/ssl/certs/ca-certificates.crt; \
+    fi
 
 RUN apk add --no-cache ca-certificates git openssh-client \
     && addgroup -S skills \

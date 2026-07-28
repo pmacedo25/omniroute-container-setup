@@ -6,6 +6,11 @@ branch="${OMNIROUTE_SKILLS_BRANCH:-main}"
 skills_dir="/skills"
 interval="${SKILLS_SYNC_INTERVAL_SECONDS:-3600}"
 
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    git config --global credential.helper store
+    printf 'https://oauth2:%s@github.com\n' "$GITHUB_TOKEN" > ~/.git-credentials
+fi
+
 sync_repository() {
     if [ -d "$skills_dir/.git" ]; then
         git -C "$skills_dir" remote set-url origin "$repository"
