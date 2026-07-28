@@ -664,6 +664,8 @@ function Invoke-OmniRouteSetup {
             -FallbackIconPath (Join-Path $SetupDirectory "design\achilles\achilles.ico")
         Test-AchillesInstallation -HomeDirectory $homeDirectory `
             -Installation $achillesInstallation | Out-Null
+        [Environment]::SetEnvironmentVariable("ACHILLES_CONFIG", $achillesInstallation.Config, "User")
+        $env:ACHILLES_CONFIG = $achillesInstallation.Config
         Write-SetupMessage "Abra o Achilles pelo ícone da Área de Trabalho ou Menu Iniciar." "OK"
     }
 
