@@ -550,27 +550,6 @@ services:
     }
 }
 
-function Invoke-ProviderHealthCheck {
-    param([string]$BaseUrl, [string]$AppKey)
-    $headers = @{ Authorization = "Bearer $AppKey" }
-    $active  = @((Invoke-RestMethod -Uri "$BaseUrl/api/providers" -Headers $headers -TimeoutSec 10).connections |
-                  Where-Object { $_.isActive })
-    if ($active.Count -eq 0) { return }
-    # Fire-and-forget: trigger the test server-side without waiting for the result.
-    # Responses can be slow through SSL-inspection proxies; the installer must not block.
-    Write-SetupMessage "Acionando teste dos providers em background ($($active.Count))..." "INFO"
-    foreach ($c in $active) {
-        Start-Job -ScriptBlock {
-            param($url, $id, $key)
-            try {
-                Invoke-RestMethod -Uri "$url/api/providers/$id/test" -Method Post `
-                    -Headers @{ Authorization = "Bearer $key" } -TimeoutSec 30 | Out-Null
-            } catch {}
-        } -ArgumentList $BaseUrl, $c.id, $AppKey | Out-Null
-    }
-    Start-Sleep -Seconds 3
-}
-
 function Remove-UnmanagedPodmanContainer {
     param([string]$ContainerName, [string]$ExpectedComposeProject)
     & podman container exists $ContainerName
@@ -699,7 +678,6 @@ function Invoke-OmniRouteSetup {
         Start-Process "$baseUrl/dashboard/providers"
         Read-Host "Conecte os provedores de IA no Dashboard e pressione ENTER para continuar"
     }
-    Invoke-ProviderHealthCheck -BaseUrl $baseUrl -AppKey $appKey
     Set-DefaultCombos -BaseUrl $baseUrl -ConfigPath (Join-Path $SetupDirectory "combos-config.json") -AppKey $appKey
 
     if (-not $SkipAchilles) {
