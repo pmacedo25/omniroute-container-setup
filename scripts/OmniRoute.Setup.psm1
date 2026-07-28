@@ -532,8 +532,16 @@ function Remove-UnmanagedPodmanContainer {
     & podman container exists $ContainerName
     if ($LASTEXITCODE -ne 0) { return }
 
-    $composeProject = (& podman inspect $ContainerName `
-        --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>$null)
+    # Use JSON output to avoid Go template quoting issues on Windows
+    $inspectJson = & podman inspect $ContainerName --format json 2>$null
+    $composeProject = $null
+    if ($LASTEXITCODE -eq 0 -and $inspectJson) {
+        $data   = $inspectJson | ConvertFrom-Json
+        $labels = if ($data -is [array]) { $data[0].Config.Labels } else { $data.Config.Labels }
+        if ($null -ne $labels -and $labels.PSObject.Properties["com.docker.compose.project"]) {
+            $composeProject = $labels."com.docker.compose.project"
+        }
+    }
     if ([string]$composeProject -eq $ExpectedComposeProject) { return }
 
     Write-SetupMessage "Substituindo o container '$ContainerName' sem metadados do Compose; os volumes persistentes serão preservados." "WARN"
