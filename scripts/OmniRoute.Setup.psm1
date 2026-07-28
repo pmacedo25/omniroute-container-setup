@@ -490,6 +490,7 @@ function Invoke-CorporateCAInjection {
     param([string]$SetupDirectory)
 
     $caDestination = Join-Path $SetupDirectory "skills-sync\netskope-ca.pem"
+    $overridePath  = Join-Path $SetupDirectory "docker-compose.override.yml"
 
     # Known SSL-inspection vendors — Root (trusted anchors) + CA (intermediates) stores
     $inspectionPatterns = @(
@@ -529,11 +530,42 @@ function Invoke-CorporateCAInjection {
             "`n-----END CERTIFICATE-----"
         }) -join "`n"
         [System.IO.File]::WriteAllText($caDestination, $pem)
+
+        # docker-compose resolves relative bind-mount paths inconsistently on Windows/Podman.
+        # Write an override with the absolute path so the CA reaches the Node.js runtime.
+        $absPath = (Resolve-Path $caDestination).Path.Replace('\', '/')
+        $overrideContent = @"
+services:
+  omniroute:
+    environment:
+      NODE_EXTRA_CA_CERTS: /certs/corporate-ca.pem
+    volumes:
+      - ${absPath}:/certs/corporate-ca.pem:ro
+"@
+        [System.IO.File]::WriteAllText($overridePath, $overrideContent)
         Write-SetupMessage "Cadeia SSL corporativa detectada ($($certs.Count) certs: $vendors). Injetada no container." "OK"
     } else {
         # Empty file keeps the Dockerfile COPY valid on environments without SSL inspection
         [System.IO.File]::WriteAllText($caDestination, "")
+        if (Test-Path $overridePath) { Remove-Item $overridePath -Force }
         Write-SetupMessage "Nenhum CA de inspeção SSL corporativo detectado; build padrão." "INFO"
+    }
+}
+
+function Invoke-ProviderHealthCheck {
+    param([string]$BaseUrl, [string]$AppKey)
+    $headers = @{ Authorization = "Bearer $AppKey" }
+    $active  = @((Invoke-RestMethod -Uri "$BaseUrl/api/providers" -Headers $headers -TimeoutSec 10).connections |
+                  Where-Object { $_.isActive })
+    if ($active.Count -eq 0) { return }
+    Write-SetupMessage "Verificando conectividade dos providers ($($active.Count))..." "INFO"
+    foreach ($c in $active) {
+        try {
+            Invoke-RestMethod -Uri "$BaseUrl/api/providers/$($c.id)/test" -Method Post `
+                -Headers $headers -TimeoutSec 20 | Out-Null
+        } catch {
+            Write-SetupMessage "Teste do provider '$($c.provider)' falhou: $($_.Exception.Message)" "WARN"
+        }
     }
 }
 
@@ -665,6 +697,7 @@ function Invoke-OmniRouteSetup {
         Start-Process "$baseUrl/dashboard/providers"
         Read-Host "Conecte os provedores de IA no Dashboard e pressione ENTER para continuar"
     }
+    Invoke-ProviderHealthCheck -BaseUrl $baseUrl -AppKey $appKey
     Set-DefaultCombos -BaseUrl $baseUrl -ConfigPath (Join-Path $SetupDirectory "combos-config.json") -AppKey $appKey
 
     if (-not $SkipAchilles) {

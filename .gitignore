@@ -16,8 +16,9 @@ skills/
 storage/
 data/
 
-# Corporate CA (generated at setup time, machine-specific)
+# Corporate CA and compose override (generated at setup time, machine-specific)
 skills-sync/netskope-ca.pem
+docker-compose.override.yml
 
 # Logs and temporary files
 *.log
