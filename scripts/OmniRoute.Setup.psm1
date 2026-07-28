@@ -650,6 +650,11 @@ function Invoke-OmniRouteSetup {
     $appKey = Ensure-AppKey -BaseUrl $baseUrl -EnvPath $envPath -NonInteractive $NonInteractive
     $env:OMNIROUTE_API_KEY = $appKey
     Set-TokenEfficiencyDefaults -BaseUrl $baseUrl -AppKey $appKey
+
+    if (-not $SkipProviderLogin -and -not $NonInteractive) {
+        Start-Process "$baseUrl/dashboard/providers"
+        Read-Host "Conecte os provedores de IA no Dashboard e pressione ENTER para continuar"
+    }
     Set-DefaultCombos -BaseUrl $baseUrl -ConfigPath (Join-Path $SetupDirectory "combos-config.json") -AppKey $appKey
 
     if (-not $SkipAchilles) {
@@ -665,10 +670,6 @@ function Invoke-OmniRouteSetup {
 
     Install-OmniCommand -SetupDirectory $SetupDirectory -HomeDirectory $homeDirectory
 
-    if (-not $SkipProviderLogin -and -not $NonInteractive) {
-        Start-Process "$baseUrl/dashboard/providers"
-        Read-Host "Conecte os provedores OAuth no Dashboard e pressione ENTER"
-    }
     Write-SetupMessage "OmniRoute disponível em $baseUrl; configuração concluída." "OK"
 }
 
