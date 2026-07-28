@@ -339,9 +339,7 @@ function Set-DefaultCombos {
     )
     $providerResponse = Invoke-RestMethod -Uri "$BaseUrl/api/providers" `
         -Headers $headers -TimeoutSec 20
-    foreach ($connection in @($providerResponse.connections | Where-Object {
-        $_.isActive -and $_.testStatus -eq "active"
-    })) {
+    foreach ($connection in @($providerResponse.connections | Where-Object { $_.isActive })) {
         try {
             $modelResponse = Invoke-RestMethod `
                 -Uri "$BaseUrl/api/providers/$($connection.id)/models" `
@@ -558,15 +556,19 @@ function Invoke-ProviderHealthCheck {
     $active  = @((Invoke-RestMethod -Uri "$BaseUrl/api/providers" -Headers $headers -TimeoutSec 10).connections |
                   Where-Object { $_.isActive })
     if ($active.Count -eq 0) { return }
-    Write-SetupMessage "Verificando conectividade dos providers ($($active.Count))..." "INFO"
+    # Fire-and-forget: trigger the test server-side without waiting for the result.
+    # Responses can be slow through SSL-inspection proxies; the installer must not block.
+    Write-SetupMessage "Acionando teste dos providers em background ($($active.Count))..." "INFO"
     foreach ($c in $active) {
-        try {
-            Invoke-RestMethod -Uri "$BaseUrl/api/providers/$($c.id)/test" -Method Post `
-                -Headers $headers -TimeoutSec 20 | Out-Null
-        } catch {
-            Write-SetupMessage "Teste do provider '$($c.provider)' falhou: $($_.Exception.Message)" "WARN"
-        }
+        Start-Job -ScriptBlock {
+            param($url, $id, $key)
+            try {
+                Invoke-RestMethod -Uri "$url/api/providers/$id/test" -Method Post `
+                    -Headers @{ Authorization = "Bearer $key" } -TimeoutSec 30 | Out-Null
+            } catch {}
+        } -ArgumentList $BaseUrl, $c.id, $AppKey | Out-Null
     }
+    Start-Sleep -Seconds 3
 }
 
 function Remove-UnmanagedPodmanContainer {
