@@ -253,7 +253,8 @@ function Remove-DuplicateSetupAppKeys {
     $response = Invoke-RestMethod -Uri "$BaseUrl/api/keys" -Headers $headers -TimeoutSec 10
     $suffix = if ($AppKey.Length -gt 4) { $AppKey.Substring($AppKey.Length - 4) } else { $AppKey }
     $setupKeys = @($response.keys | Where-Object {
-        $_.name -eq "omniroute-setup" -or $_.label -eq "omniroute-setup"
+        ($_.PSObject.Properties["name"]  -and $_.name  -eq "omniroute-setup") -or
+        ($_.PSObject.Properties["label"] -and $_.label -eq "omniroute-setup")
     })
     $current = @($setupKeys | Where-Object {
         Test-AppKeyMetadataSuffix -Metadata $_ -Suffix $suffix
