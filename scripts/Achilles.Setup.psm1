@@ -478,7 +478,7 @@ function Test-AchillesInstallation {
     }
     $configuration = Get-Content -LiteralPath $Installation.Config -Raw | ConvertFrom-Json
     if ($configuration.modelSelection -ne "dynamic" -or
-        $configuration.configuredProvidersOnly -ne $false -or
+        $configuration.configuredProvidersOnly -ne $true -or
         $configuration.apiKeyEnvironmentVariable -ne "OMNIROUTE_API_KEY") {
         throw "A configuração do Achilles não atende ao contrato OmniRoute."
     }
