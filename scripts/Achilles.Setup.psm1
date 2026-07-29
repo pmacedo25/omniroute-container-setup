@@ -239,7 +239,12 @@ if (-not (Test-Path -LiteralPath `$executable -PathType Leaf)) {
     throw "Achilles executable not found. Re-run the OmniRoute installer."
 }
 `$env:ACHILLES_CONFIG = Join-Path `$stateDirectory "config.json"
-`$env:OPENAI_API_KEY = `$env:OMNIROUTE_API_KEY
+`$currentApiKey = [Environment]::GetEnvironmentVariable("OMNIROUTE_API_KEY", "User")
+if ([string]::IsNullOrWhiteSpace(`$currentApiKey)) {
+    throw "OMNIROUTE_API_KEY is not configured for the current user. Re-run the OmniRoute installer."
+}
+`$env:OMNIROUTE_API_KEY = `$currentApiKey
+`$env:OPENAI_API_KEY = `$currentApiKey
 `$arguments = @(`$WorkspaceArguments | Where-Object {
     -not [string]::IsNullOrWhiteSpace(`$_)
 })

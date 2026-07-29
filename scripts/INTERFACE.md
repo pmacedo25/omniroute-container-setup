@@ -19,6 +19,9 @@ rodar localmente ou em contêiner.
 ### `Achilles.Setup.psm1`
 
 - Baixar release público do repositório de binários ou consumir ZIP local.
+- O launcher relê `OMNIROUTE_API_KEY` do ambiente persistente do usuário em
+  toda abertura, substituindo valores antigos herdados por processos que
+  permaneceram abertos durante uma atualização.
 - Validar arquitetura, SemVer e SHA-256.
 - Instalar lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
 - Gravar configuração sem segredo em `%USERPROFILE%\.achilles`.
