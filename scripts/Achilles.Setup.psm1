@@ -39,7 +39,7 @@ function Write-AchillesConfiguration {
         omnirouteCatalogUrl = "http://127.0.0.1:$OmniRoutePort/v1/models"
         apiKeyEnvironmentVariable = "OMNIROUTE_API_KEY"
         modelSelection = "dynamic"
-        configuredProvidersOnly = $false
+        configuredProvidersOnly = $true
         telemetry = $false
     }
     $configPath = Join-Path $stateDirectory "config.json"

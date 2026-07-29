@@ -14,13 +14,10 @@ services:
       HOSTNAME: 0.0.0.0
       REQUIRE_API_KEY: "true"
       OMNIROUTE_MEMORY_MB: ${OMNIROUTE_MEMORY_MB:-1024}
-      NODE_EXTRA_CA_CERTS: /certs/corporate-ca.pem
     ports:
       - "${PORT:-20128}:${PORT:-20128}"
     volumes:
       - omniroute-data:/app/data
-      - omniroute-skills:/app/data/skills:ro
-      - ./skills-sync/netskope-ca.pem:/certs/corporate-ca.pem:ro
     healthcheck:
       test: ["CMD", "node", "healthcheck.mjs"]
       interval: 15s
@@ -32,18 +29,18 @@ services:
     build:
       context: ./skills-sync
       dockerfile: Dockerfile
-    image: omniroute-skills-sync:1
+    image: agent-skills-sync:1
     restart: unless-stopped
     environment:
-      OMNIROUTE_SKILLS_REPO: ${OMNIROUTE_SKILLS_REPO}
-      OMNIROUTE_SKILLS_BRANCH: ${OMNIROUTE_SKILLS_BRANCH:-main}
+      SKILLS_REPOSITORY: ${OMNIROUTE_SKILLS_REPO}
+      SKILLS_BRANCH: ${OMNIROUTE_SKILLS_BRANCH:-main}
       SKILLS_SYNC_INTERVAL_SECONDS: ${SKILLS_SYNC_INTERVAL_SECONDS:-3600}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     volumes:
-      - omniroute-skills:/skills
+      - type: bind
+        source: ${CAVEMAN_SKILLS_DIR}
+        target: /skills
 
 volumes:
   omniroute-data:
     name: omniroute-data
-  omniroute-skills:
-    name: omniroute-skills

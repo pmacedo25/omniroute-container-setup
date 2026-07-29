@@ -1,67 +1,56 @@
 {
-  "version": 1,
+  "version": 2,
+  "enabled": true,
+  "deleteManagedWhenDisabled": true,
+  "managedNames": [
+    "combo-coding",
+    "combo-refining",
+    "combo-testing"
+  ],
   "combos": [
     {
-      "name": "combo-coding",
-      "description": "Fluxo diário de programação, equilibrando qualidade, latência e custo.",
+      "name": "combo-testing",
+      "description": "Tarefas econômicas, testes e exploração rápida.",
       "strategy": "priority",
       "models": [
-        "github/gpt-5.3-codex",
-        "claude/claude-sonnet-4-6",
-        "github/claude-sonnet-4.6"
+        "antigravity/gemini-3.1-flash-lite",
+        "cx/gpt-5.3-codex-spark",
+        "antigravity/gpt-oss-120b-medium"
       ],
-      "context_cache_protection": true,
-      "context_length": 272000,
       "config": {
-        "compressionMode": "stacked",
-        "failoverBeforeRetry": true,
-        "maxRetries": 0,
+        "compressionMode": "rtk",
         "trackMetrics": true,
-        "responseValidation": {
-          "minContentLength": 1
-        }
+        "failoverBeforeRetry": true
+      }
+    },
+    {
+      "name": "combo-coding",
+      "description": "Implementação e manutenção de código com equilíbrio entre custo e qualidade.",
+      "strategy": "priority",
+      "models": [
+        "antigravity/gemini-3.1-pro-low",
+        "cx/gpt-5.5-medium",
+        "antigravity/claude-sonnet-4-6"
+      ],
+      "config": {
+        "compressionMode": "rtk",
+        "trackMetrics": true,
+        "failoverBeforeRetry": true
       }
     },
     {
       "name": "combo-refining",
-      "description": "Arquitetura, revisão e raciocínio profundo.",
+      "description": "Refinamento, revisão e decisões que exigem maior qualidade.",
       "strategy": "priority",
       "models": [
-        "claude/claude-sonnet-4-6",
-        "claude/claude-sonnet-5",
-        "github/gpt-5.3-codex"
+        "cx/gpt-5.5-high",
+        "antigravity/claude-sonnet-4-6",
+        "antigravity/gemini-3.1-pro-high"
       ],
-      "context_cache_protection": true,
-      "context_length": 272000,
       "config": {
-        "compressionMode": "stacked",
-        "failoverBeforeRetry": true,
-        "maxRetries": 0,
+        "compressionMode": "rtk",
         "trackMetrics": true,
-        "responseValidation": {
-          "minContentLength": 1
-        }
-      }
-    },
-    {
-      "name": "combo-testing",
-      "description": "Testes, exploração e tarefas rápidas priorizando o menor custo.",
-      "strategy": "priority",
-      "models": [
-        "github/gemini-3.1-pro-preview",
-        "claude/claude-haiku-4-5-20251001",
-        "github/claude-haiku-4.5"
-      ],
-      "context_cache_protection": true,
-      "context_length": 272000,
-      "config": {
-        "compressionMode": "stacked",
-        "failoverBeforeRetry": true,
-        "maxRetries": 0,
-        "trackMetrics": true,
-        "responseValidation": {
-          "minContentLength": 1
-        }
+        "failoverBeforeRetry": true
       }
     }
   ]

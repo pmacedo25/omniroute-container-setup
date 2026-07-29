@@ -10,10 +10,13 @@ RUN if [ -s /usr/local/share/ca-certificates/corporate-ca.crt ]; then \
         cat /usr/local/share/ca-certificates/corporate-ca.crt >> /etc/ssl/certs/ca-certificates.crt; \
     fi
 
-RUN apk add --no-cache ca-certificates git openssh-client \
+RUN apk add --no-cache ca-certificates git jq openssh-client \
     && addgroup -S skills \
-    && adduser -S -G skills -h /home/skills skills
+    && adduser -S -G skills -h /home/skills skills \
+    && mkdir -p /skills /state \
+    && chown -R skills:skills /skills /state
 
+COPY --chmod=755 sync-lib.sh /usr/local/lib/skills-sync.sh
 COPY --chmod=755 entrypoint.sh /usr/local/bin/sync-skills
 
 USER skills

@@ -270,36 +270,168 @@ function Remove-DuplicateSetupAppKeys {
     }
 }
 
+function New-ContainerSetupAppKey {
+    param([string]$Engine)
+
+    # Management endpoints cannot be bootstrapped with an inference AppKey.
+    # OmniRoute's supported local CLI channel derives a machine-bound token and
+    # accepts it only over loopback. Execute the request inside the container so
+    # the bootstrap secret never crosses the container boundary or reaches logs.
+    $script = @'
+import crypto from "node:crypto";
+const machineIdModule = await import("node-machine-id");
+const machineIdSync =
+  machineIdModule.machineIdSync || machineIdModule.default?.machineIdSync;
+if (typeof machineIdSync !== "function") {
+  throw new Error("node-machine-id não expõe machineIdSync nesta imagem");
+}
+const cliToken = crypto
+  .createHmac("sha256", machineIdSync(true))
+  .update(process.env.OMNIROUTE_CLI_SALT || "omniroute-cli-auth-v1")
+  .digest("hex");
+const baseUrl = "http://127.0.0.1:" + (process.env.PORT || "20128");
+const createBody = JSON.stringify({
+    name: "omniroute-setup",
+    label: "omniroute-setup",
+    scopes: ["manage"]
+});
+const createKey = () => fetch(baseUrl + "/api/keys", {
+  method: "POST",
+  headers: {
+    "x-omniroute-cli-token": cliToken,
+    "x-omniroute-peer-locality": "loopback",
+    "content-type": "application/json"
+  },
+  body: createBody
+});
+
+let response = await createKey();
+let onboardingWindow = false;
+if (response.status === 401) {
+  // The 3.8.48 standalone image can package node-machine-id in a shape that
+  // makes its bundled CLI token helper return an empty token. The public
+  // onboarding endpoint is allowed only while setupComplete=false.
+  const statusResponse = await fetch(baseUrl + "/api/settings/require-login");
+  const status = await statusResponse.json();
+  if (status.setupComplete || status.hasPassword) {
+    throw new Error("management auth is required on an initialized instance");
+  }
+  const openResponse = await fetch(baseUrl + "/api/settings/require-login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ requireLogin: false })
+  });
+  if (!openResponse.ok) {
+    throw new Error("could not open the local onboarding bootstrap window");
+  }
+  onboardingWindow = true;
+  response = await createKey();
+}
+
+const body = await response.text();
+if (!response.ok) {
+  if (onboardingWindow) {
+    await fetch(baseUrl + "/api/settings/require-login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ requireLogin: true })
+    });
+  }
+  throw new Error("HTTP " + response.status + ": " + body);
+}
+if (onboardingWindow) {
+  const created = JSON.parse(body);
+  if (!created.id) {
+    throw new Error("AppKey criada sem ID; não é possível aplicar o escopo manage");
+  }
+  const scopeResponse = await fetch(baseUrl + "/api/keys/" + encodeURIComponent(created.id), {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scopes: ["manage"] })
+  });
+  if (!scopeResponse.ok) {
+    throw new Error("AppKey criada, mas não foi possível aplicar o escopo manage");
+  }
+  const closeResponse = await fetch(baseUrl + "/api/settings/require-login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ requireLogin: true })
+  });
+  if (!closeResponse.ok) {
+    throw new Error("AppKey criada, mas a proteção de login não foi restaurada");
+  }
+}
+process.stdout.write(body);
+'@
+    $output = & $Engine @(
+        "exec", "--user", "node", "omniroute", "node", "--input-type=module", "--eval", $script
+    ) 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha no bootstrap local da AppKey: $($output -join [Environment]::NewLine)"
+    }
+    try {
+        $created = ($output -join [Environment]::NewLine) | ConvertFrom-Json
+    } catch {
+        throw "O bootstrap local da AppKey retornou uma resposta inválida."
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$created.key)) {
+        throw "O bootstrap local da AppKey não retornou o campo 'key'."
+    }
+    return [string]$created.key
+}
+
+function Save-SharedAppKey {
+    param([string]$EnvPath, [string]$AppKey)
+    # A mesma AppKey identifica tanto as chamadas administrativas quanto as
+    # inferências. O OmniRoute atribui usage_history e custo pelo ID da chave,
+    # independentemente de ela também possuir o escopo `manage`.
+    Set-EnvValue -Path $EnvPath -Name "OMNIROUTE_API_KEY" -Value $AppKey
+    Remove-EnvValue -Path $EnvPath -Names @("OMNIROUTE_MANAGEMENT_API_KEY")
+    [Environment]::SetEnvironmentVariable("OMNIROUTE_API_KEY", $AppKey, "User")
+    $env:OMNIROUTE_API_KEY = $AppKey
+}
+
 function Ensure-AppKey {
     param(
         [string]$BaseUrl,
         [string]$EnvPath,
-        [bool]$NonInteractive
+        [bool]$NonInteractive,
+        [AllowEmptyString()][string]$ContainerEngine
     )
     $existing = Get-EnvValue -Path $EnvPath -Name "OMNIROUTE_API_KEY"
+    if ([string]::IsNullOrWhiteSpace($existing)) {
+        # Migração da instalação que separava desnecessariamente a chave de
+        # gestão da chave de inferência.
+        $existing = Get-EnvValue -Path $EnvPath -Name "OMNIROUTE_MANAGEMENT_API_KEY"
+    }
     if (Test-RegisteredAppKey -BaseUrl $BaseUrl -AppKey $existing) {
+        Save-SharedAppKey -EnvPath $EnvPath -AppKey $existing
         Remove-DuplicateSetupAppKeys -BaseUrl $BaseUrl -AppKey $existing
         return $existing
     }
 
     try {
-        $headers = @{}
-        if (Test-AppKey -BaseUrl $BaseUrl -AppKey $existing) {
-            $headers.Authorization = "Bearer $existing"
+        if (-not [string]::IsNullOrWhiteSpace($ContainerEngine)) {
+            $appKey = New-ContainerSetupAppKey -Engine $ContainerEngine
+        } else {
+            $headers = @{}
+            if (Test-AppKey -BaseUrl $BaseUrl -AppKey $existing) {
+                $headers.Authorization = "Bearer $existing"
+            }
+            # OmniRoute 3.8.48 validates `name`, while its bundled OpenAPI declares
+            # `label`. Sending both keeps the installer compatible with both shapes.
+            $created = Invoke-RestMethod -Uri "$BaseUrl/api/keys" -Method Post `
+                -Headers $headers -ContentType "application/json" `
+                -Body '{"name":"omniroute-setup","label":"omniroute-setup","scopes":["manage"]}' -TimeoutSec 20
+            if ([string]::IsNullOrWhiteSpace([string]$created.key)) {
+                throw "A API não retornou o campo 'key'."
+            }
+            $appKey = [string]$created.key
         }
-        # OmniRoute 3.8.48 validates `name`, while its bundled OpenAPI declares
-        # `label`. Sending both keeps the installer compatible with both shapes.
-        $created = Invoke-RestMethod -Uri "$BaseUrl/api/keys" -Method Post `
-            -Headers $headers -ContentType "application/json" `
-            -Body '{"name":"omniroute-setup","label":"omniroute-setup"}' -TimeoutSec 20
-        if ([string]::IsNullOrWhiteSpace([string]$created.key)) {
-            throw "A API não retornou o campo 'key'."
-        }
-        $appKey = [string]$created.key
     } catch {
         Write-SetupMessage "Não foi possível criar a APPKEY automaticamente: $($_.Exception.Message)" "WARN"
         if ($NonInteractive) {
-            throw "Informe OMNIROUTE_API_KEY no arquivo '$EnvPath' e reexecute, ou execute sem -NonInteractive para digitar a chave."
+            throw "Informe OMNIROUTE_API_KEY no arquivo '$EnvPath' e reexecute, ou execute sem -NonInteractive."
         }
 
         Write-Host ""
@@ -324,13 +456,12 @@ function Ensure-AppKey {
         } while ([string]::IsNullOrWhiteSpace($appKey))
     }
 
-    Set-EnvValue -Path $EnvPath -Name "OMNIROUTE_API_KEY" -Value $appKey
-    [Environment]::SetEnvironmentVariable("OMNIROUTE_API_KEY", $appKey, "User")
+    Save-SharedAppKey -EnvPath $EnvPath -AppKey $appKey
     Remove-DuplicateSetupAppKeys -BaseUrl $BaseUrl -AppKey $appKey
     return $appKey
 }
 
-function Set-DefaultCombos {
+function Set-ConfiguredCombos {
     param([string]$BaseUrl, [string]$ConfigPath, [string]$AppKey)
     $headers = @{ Authorization = "Bearer $AppKey" }
     $configuration = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
@@ -339,7 +470,26 @@ function Set-DefaultCombos {
     $existingByName = @{}
     foreach ($item in @($existingResponse.combos)) { $existingByName[$item.name] = $item }
 
+    if ($configuration.PSObject.Properties["enabled"] -and -not $configuration.enabled) {
+        if ($configuration.deleteManagedWhenDisabled) {
+            foreach ($name in @($configuration.managedNames)) {
+                if ($existingByName.ContainsKey($name)) {
+                    Invoke-RestMethod -Uri "$BaseUrl/api/combos/$($existingByName[$name].id)" `
+                        -Method Delete -Headers $headers -TimeoutSec 20 | Out-Null
+                }
+            }
+        }
+        Write-SetupMessage "Combos automáticos desativados; combos do usuário foram preservados." "OK"
+        return
+    }
+
     foreach ($combo in $configuration.combos) {
+        if ([string]::IsNullOrWhiteSpace([string]$combo.name) -or @($combo.models).Count -eq 0) {
+            throw "Todo combo declarado precisa de nome e ao menos um modelo."
+        }
+        if ([string]$combo.strategy -eq "auto") {
+            throw "A estratégia 'auto' não é permitida nos combos declarativos."
+        }
         $body = $combo | ConvertTo-Json -Depth 20
         if ($existingByName.ContainsKey($combo.name)) {
             Invoke-RestMethod -Uri "$BaseUrl/api/combos/$($existingByName[$combo.name].id)" -Method Put -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec 20 | Out-Null
@@ -349,38 +499,84 @@ function Set-DefaultCombos {
     }
 }
 
+function Set-ConfiguredProvidersOnly {
+    param([string]$BaseUrl, [string]$AppKey)
+    $headers = @{ Authorization = "Bearer $AppKey" }
+    $noAuthProviderIds = @(
+        "opencode", "duckduckgo-web", "felo-web", "theoldllm", "chipotle",
+        "veoaifree-web", "mimocode", "auggie", "aihorde"
+    )
+    $providerResponse = Invoke-RestMethod -Uri "$BaseUrl/api/providers" -Headers $headers -TimeoutSec 20
+    $connections = if ($providerResponse.PSObject.Properties["connections"]) {
+        @($providerResponse.connections)
+    } elseif ($providerResponse.PSObject.Properties["providers"]) {
+        @($providerResponse.providers)
+    } else {
+        @($providerResponse)
+    }
+    $userProviderIds = @($connections | ForEach-Object {
+        if ($_.PSObject.Properties["provider"]) { [string]$_.provider }
+        elseif ($_.PSObject.Properties["providerId"]) { [string]$_.providerId }
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+
+    $current = Invoke-RestMethod -Uri "$BaseUrl/api/settings" -Headers $headers `
+        -TimeoutSec 20 -ErrorAction Stop
+    $currentBlocked = if ($current.PSObject.Properties["blockedProviders"]) {
+        @($current.blockedProviders | Where-Object {
+            $_ -is [string] -and -not [string]::IsNullOrWhiteSpace($_)
+        })
+    } else {
+        @()
+    }
+    $blocked = @(
+        $currentBlocked +
+        @($noAuthProviderIds | Where-Object { $_ -notin $userProviderIds })
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+    $body = @{ blockedProviders = @($blocked) } | ConvertTo-Json -Depth 5
+    $saved = Invoke-RestMethod -Uri "$BaseUrl/api/settings" -Method Patch `
+        -Headers $headers -ContentType "application/json" -Body $body `
+        -TimeoutSec 20 -ErrorAction Stop
+    if (-not $saved.PSObject.Properties["blockedProviders"]) {
+        throw "O OmniRoute aceitou a configuração, mas não retornou blockedProviders para validação."
+    }
+    $missing = @($noAuthProviderIds | Where-Object {
+        $_ -notin $userProviderIds -and $_ -notin @($saved.blockedProviders)
+    })
+    if ($missing.Count -gt 0) {
+        throw "O OmniRoute não confirmou o bloqueio dos providers padrão: $($missing -join ', ')."
+    }
+    Write-SetupMessage "Providers sem autenticação foram bloqueados; $($userProviderIds.Count) conexão(ões) do usuário preservada(s)." "OK"
+}
+
 function Set-TokenEfficiencyDefaults {
     param([string]$BaseUrl, [string]$AppKey)
     $headers = @{ Authorization = "Bearer $AppKey" }
     $settings = [ordered]@{
         enabled = $true
-        defaultMode = "stacked"
-        autoTriggerMode = "stacked"
-        autoTriggerTokens = 8000
+        defaultMode = "rtk"
+        autoTriggerMode = "off"
+        autoTriggerTokens = 0
         cacheMinutes = 60
         preserveSystemPrompt = $true
         preserveSystemPromptMode = "always"
         mcpDescriptionCompressionEnabled = $true
-        stackedPipeline = @(
-            @{ engine = "rtk"; intensity = "standard" },
-            @{ engine = "caveman"; intensity = "full" }
-        )
+        stackedPipeline = @()
         engines = [ordered]@{
-            "session-dedup" = @{ enabled = $true }
-            ccr = @{ enabled = $true }
+            "session-dedup" = @{ enabled = $false }
+            ccr = @{ enabled = $false }
             lite = @{ enabled = $false }
             rtk = @{ enabled = $true; level = "standard" }
-            headroom = @{ enabled = $true }
+            headroom = @{ enabled = $false }
             relevance = @{ enabled = $false }
-            caveman = @{ enabled = $true; level = "full" }
+            caveman = @{ enabled = $false; level = "full" }
             aggressive = @{ enabled = $false }
             llmlingua = @{ enabled = $false }
             ultra = @{ enabled = $false }
             omniglyph = @{ enabled = $false }
         }
         cavemanConfig = @{
-            enabled = $true
-            compressRoles = @("user")
+            enabled = $false
+            compressRoles = @()
             skipRules = @()
             minMessageLength = 50
             preservePatterns = @()
@@ -425,8 +621,10 @@ function Set-TokenEfficiencyDefaults {
         -Body ($settings | ConvertTo-Json -Depth 20) -TimeoutSec 20 | Out-Null
     $saved = Invoke-RestMethod -Uri "$BaseUrl/api/settings/compression" `
         -Headers $headers -TimeoutSec 20
-    if (-not $saved.enabled -or $saved.defaultMode -ne "stacked" -or
-        -not $saved.rtkConfig.enabled -or -not $saved.cavemanConfig.enabled) {
+    if (-not $saved.enabled -or $saved.defaultMode -ne "rtk" -or
+        -not $saved.rtkConfig.enabled -or $saved.cavemanConfig.enabled -or
+        $saved.engines."session-dedup".enabled -or $saved.engines.ccr.enabled -or
+        $saved.engines.headroom.enabled) {
         throw "O OmniRoute não confirmou os padrões de economia de tokens."
     }
 }
@@ -461,10 +659,15 @@ function Install-OmniCommand {
 }
 
 function Invoke-CorporateCAInjection {
-    param([string]$SetupDirectory)
+    param(
+        [string]$SetupDirectory,
+        [AllowEmptyString()][string]$CorporateCAPath
+    )
 
     $caDestination = Join-Path $SetupDirectory "skills-sync\netskope-ca.pem"
     $overridePath  = Join-Path $SetupDirectory "docker-compose.override.yml"
+    $certificateCount = 0
+    $sourceDescription = ""
 
     # Known SSL-inspection vendors — Root (trusted anchors) + CA (intermediates) stores
     $inspectionPatterns = @(
@@ -476,35 +679,51 @@ function Invoke-CorporateCAInjection {
         "*Symantec Web*"
     )
 
-    $seen  = @{}
-    $certs = @()
-    foreach ($storeLocation in @("LocalMachine", "CurrentUser")) {
-        foreach ($storeName in @("Root", "CA")) {
-            $store = "Cert:\$storeLocation\$storeName"
-            foreach ($pattern in $inspectionPatterns) {
-                Get-ChildItem $store -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Subject -like $pattern -or $_.Issuer -like $pattern } |
-                    ForEach-Object {
-                        if (-not $seen.ContainsKey($_.Thumbprint)) {
-                            $seen[$_.Thumbprint] = $true
-                            $certs += $_
+    if (-not [string]::IsNullOrWhiteSpace($CorporateCAPath)) {
+        if (-not (Test-Path -LiteralPath $CorporateCAPath -PathType Leaf)) {
+            throw "O CA corporativo informado não existe: '$CorporateCAPath'."
+        }
+        $pem = Get-Content -LiteralPath $CorporateCAPath -Raw
+        if ($pem -notmatch "-----BEGIN CERTIFICATE-----") {
+            throw "O CA corporativo informado precisa estar no formato PEM."
+        }
+        [System.IO.File]::WriteAllText($caDestination, $pem)
+        $certificateCount = ([regex]::Matches($pem, "-----BEGIN CERTIFICATE-----")).Count
+        $sourceDescription = "arquivo explícito"
+    } else {
+        $seen  = @{}
+        $certs = @()
+        foreach ($storeLocation in @("LocalMachine", "CurrentUser")) {
+            foreach ($storeName in @("Root", "CA")) {
+                $store = "Cert:\$storeLocation\$storeName"
+                foreach ($pattern in $inspectionPatterns) {
+                    Get-ChildItem $store -ErrorAction SilentlyContinue |
+                        Where-Object {
+                            $_.NotBefore -le (Get-Date) -and $_.NotAfter -gt (Get-Date) -and
+                            ($_.Subject -like $pattern -or $_.Issuer -like $pattern)
+                        } |
+                        ForEach-Object {
+                            if (-not $seen.ContainsKey($_.Thumbprint)) {
+                                $seen[$_.Thumbprint] = $true
+                                $certs += $_
+                            }
                         }
-                    }
+                }
             }
+        }
+        if ($certs.Count -gt 0) {
+            $pem = ($certs | Sort-Object Thumbprint | ForEach-Object {
+                "-----BEGIN CERTIFICATE-----`n" +
+                [Convert]::ToBase64String($_.RawData, [Base64FormattingOptions]::InsertLineBreaks) +
+                "`n-----END CERTIFICATE-----"
+            }) -join "`n"
+            [System.IO.File]::WriteAllText($caDestination, $pem)
+            $certificateCount = $certs.Count
+            $sourceDescription = "repositório de certificados do Windows"
         }
     }
 
-    if ($certs.Count -gt 0) {
-        $vendors = ($certs | ForEach-Object {
-            if ($_.Subject -match "O=([^,]+)") { $Matches[1].Trim() } else { $_.Subject }
-        } | Select-Object -Unique) -join ", "
-        $pem = ($certs | ForEach-Object {
-            "-----BEGIN CERTIFICATE-----`n" +
-            [Convert]::ToBase64String($_.RawData, [Base64FormattingOptions]::InsertLineBreaks) +
-            "`n-----END CERTIFICATE-----"
-        }) -join "`n"
-        [System.IO.File]::WriteAllText($caDestination, $pem)
-
+    if ($certificateCount -gt 0) {
         # docker-compose resolves relative bind-mount paths inconsistently on Windows/Podman.
         # Write an override with the absolute path so the CA reaches the Node.js runtime.
         $absPath = (Resolve-Path $caDestination).Path.Replace('\', '/')
@@ -517,7 +736,7 @@ services:
       - ${absPath}:/certs/corporate-ca.pem:ro
 "@
         [System.IO.File]::WriteAllText($overridePath, $overrideContent)
-        Write-SetupMessage "Cadeia SSL corporativa detectada ($($certs.Count) certs: $vendors). Injetada no container." "OK"
+        Write-SetupMessage "CA corporativo carregado de $sourceDescription ($certificateCount certificado(s)); injetado somente no container." "OK"
     } else {
         # Empty file keeps the Dockerfile COPY valid on environments without SSL inspection
         [System.IO.File]::WriteAllText($caDestination, "")
@@ -562,10 +781,68 @@ function Start-ContainerMode {
             Remove-UnmanagedPodmanContainer -ContainerName "omniroute" `
                 -ExpectedComposeProject "omniroute-setup"
         }
-        $arguments = @("compose", "up", "-d", "--pull", "missing", "--build")
+        # The synchronizer needs the AppKey created after the gateway starts.
+        # Start only the gateway here; the mandatory first sync runs later.
+        $arguments = @("compose", "up", "-d", "--pull", "missing", "omniroute")
         Invoke-External $Engine $arguments "Falha ao iniciar os contêineres"
     } finally {
         $env:COMPOSE_CONVERT_WINDOWS_PATHS = $previousPathConversion
+        Pop-Location
+    }
+}
+
+function Start-ValidatedSkillsSync {
+    param(
+        [string]$Engine,
+        [string]$SetupDirectory,
+        [string]$SkillsDirectory
+    )
+    Push-Location $SetupDirectory
+    $previousPathConversion = $env:COMPOSE_CONVERT_WINDOWS_PATHS
+    try {
+        if ($Engine -eq "podman") {
+            $env:COMPOSE_CONVERT_WINDOWS_PATHS = "0"
+        }
+        Invoke-External $Engine @("compose", "build", "skills-sync") `
+            "Falha ao preparar o sincronizador de skills"
+        Invoke-External $Engine @("compose", "run", "--rm", "--no-deps", "-e", "SKILLS_SYNC_ONCE=true", "skills-sync") `
+            "O container não conseguiu acessar e materializar o repositório de skills. Verifique o login do GitHub e o acesso ao repositório."
+        $managedCount = @(Get-ChildItem -LiteralPath $SkillsDirectory -Directory -Filter "pat-*" |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "SKILL.md") }).Count
+        if ($managedCount -eq 0) {
+            throw "A sincronização terminou sem criar skills em '$SkillsDirectory'. Confira se o repositório contém AGENTS.md ou arquivos .agents/**/*.md."
+        }
+        Invoke-External $Engine @("compose", "up", "-d", "--no-deps", "--force-recreate", "skills-sync") `
+            "A primeira sincronização funcionou, mas não foi possível iniciar a atualização periódica"
+        Write-SetupMessage "$managedCount skill(s) do Caveman materializadas e atualização periódica habilitada." "OK"
+    } finally {
+        $env:COMPOSE_CONVERT_WINDOWS_PATHS = $previousPathConversion
+        Pop-Location
+    }
+}
+
+function Remove-LegacyOmniSkills {
+    param([string]$BaseUrl, [string]$AppKey)
+    $headers = @{ Authorization = "Bearer $AppKey" }
+    $response = Invoke-RestMethod -Uri "$BaseUrl/api/skills?source=local&limit=200" `
+        -Headers $headers -TimeoutSec 20 -ErrorAction Stop
+    $legacy = @($response.skills | Where-Object { $_.name -like "pat-*" })
+    foreach ($skill in $legacy) {
+        Invoke-RestMethod -Uri "$BaseUrl/api/skills/$($skill.id)" -Method Delete `
+            -Headers $headers -TimeoutSec 20 -ErrorAction Stop | Out-Null
+    }
+    if ($legacy.Count -gt 0) {
+        Write-SetupMessage "$($legacy.Count) skill(s) instrucionais legadas removidas do executor Omni Skills." "OK"
+    }
+}
+
+function Restart-ContainerGateway {
+    param([string]$Engine, [string]$SetupDirectory)
+    Push-Location $SetupDirectory
+    try {
+        Invoke-External $Engine @("compose", "restart", "omniroute") `
+            "A AppKey foi criada, mas não foi possível recarregar o gateway"
+    } finally {
         Pop-Location
     }
 }
@@ -606,7 +883,8 @@ function Invoke-OmniRouteSetup {
         [AllowEmptyString()][string]$AchillesArtifactPath,
         [bool]$NonInteractive,
         [bool]$SkipAchilles,
-        [bool]$SkipProviderLogin
+        [bool]$SkipProviderLogin,
+        [AllowEmptyString()][string]$CorporateCAPath
     )
     $homeDirectory = $env:USERPROFILE
     $stateDirectory = Join-Path $homeDirectory ".omniroute"
@@ -626,6 +904,9 @@ function Invoke-OmniRouteSetup {
     Set-EnvValue $envPath "PORT" ([string]$Port)
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_REPO" $SkillsRepository
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_BRANCH" $SkillsBranch
+    $cavemanSkillsDirectory = Join-Path $homeDirectory ".cave\skills"
+    New-Item -ItemType Directory -Path $cavemanSkillsDirectory -Force | Out-Null
+    Set-EnvValue $envPath "CAVEMAN_SKILLS_DIR" $cavemanSkillsDirectory.Replace('\', '/')
     if ($Mode -eq "container") {
         $githubToken = Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive
         if (![string]::IsNullOrWhiteSpace($githubToken)) {
@@ -636,7 +917,7 @@ function Invoke-OmniRouteSetup {
     if ($Mode -eq "container") {
         New-Item -ItemType File -Path (Join-Path $stateDirectory "mode.container") -Force | Out-Null
         $engine = Ensure-ContainerEngine
-        Invoke-CorporateCAInjection -SetupDirectory $SetupDirectory
+        Invoke-CorporateCAInjection -SetupDirectory $SetupDirectory -CorporateCAPath $CorporateCAPath
         Start-ContainerMode -Engine $engine -SetupDirectory $SetupDirectory
     } else {
         Remove-Item -LiteralPath (Join-Path $stateDirectory "mode.container") -Force -ErrorAction SilentlyContinue
@@ -647,15 +928,29 @@ function Invoke-OmniRouteSetup {
 
     $baseUrl = "http://localhost:$Port"
     Wait-HttpReady -Url "$baseUrl/api/monitoring/health"
-    $appKey = Ensure-AppKey -BaseUrl $baseUrl -EnvPath $envPath -NonInteractive $NonInteractive
+    $containerEngine = if ($Mode -eq "container") { $engine } else { "" }
+    $appKey = Ensure-AppKey -BaseUrl $baseUrl -EnvPath $envPath `
+        -NonInteractive $NonInteractive -ContainerEngine $containerEngine
     $env:OMNIROUTE_API_KEY = $appKey
+    if ($Mode -eq "container") {
+        # The API-key metadata cache in 3.8.48 is not invalidated when scopes
+        # are patched during onboarding. Restart before the first management call.
+        Restart-ContainerGateway -Engine $engine -SetupDirectory $SetupDirectory
+        Wait-HttpReady -Url "$baseUrl/api/monitoring/health"
+        # Validate GitHub access from the same container/network used in normal
+        # operation and require a non-empty first publication.
+        Start-ValidatedSkillsSync -Engine $engine -SetupDirectory $SetupDirectory `
+            -SkillsDirectory $cavemanSkillsDirectory
+    }
+    Remove-LegacyOmniSkills -BaseUrl $baseUrl -AppKey $appKey
     Set-TokenEfficiencyDefaults -BaseUrl $baseUrl -AppKey $appKey
 
     if (-not $SkipProviderLogin -and -not $NonInteractive) {
         Start-Process "$baseUrl/dashboard/providers"
         Read-Host "Conecte os provedores de IA no Dashboard e pressione ENTER para continuar"
     }
-    Set-DefaultCombos -BaseUrl $baseUrl -ConfigPath (Join-Path $SetupDirectory "combos-config.json") -AppKey $appKey
+    Set-ConfiguredProvidersOnly -BaseUrl $baseUrl -AppKey $appKey
+    Set-ConfiguredCombos -BaseUrl $baseUrl -ConfigPath (Join-Path $SetupDirectory "combos-config.json") -AppKey $appKey
 
     if (-not $SkipAchilles) {
         $achillesInstallation = Install-Achilles -HomeDirectory $homeDirectory `
@@ -675,4 +970,4 @@ function Invoke-OmniRouteSetup {
     Write-SetupMessage "OmniRoute disponível em $baseUrl; configuração concluída." "OK"
 }
 
-Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Sync-SkillsRepository, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-DefaultCombos, Get-PathWithEntry, Invoke-OmniRouteSetup
+Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Sync-SkillsRepository, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup

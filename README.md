@@ -76,28 +76,47 @@ Parâmetros úteis:
 - `-SkipAchilles` para instalar somente o gateway
 - `-AchillesVersion <semver|latest>`
 - `-AchillesArtifactPath <zip>` para validar um build local sem GitHub
+- `-CorporateCAPath <arquivo.pem>` quando a CA de inspeção não puder ser
+  descoberta no repositório de certificados do Windows
 - `-NonInteractive` para CI/provisionamento; exige `-SkillsRepository`
 
 A autenticação OAuth dos provedores continua dependendo do consentimento no
-navegador. Todo o restante, incluindo APPKEY, três combos, persistência,
-background e configuração do Achilles, é automático.
+navegador. Todo o restante, incluindo APPKEY, bloqueio dos providers sem
+autenticação, persistência, sincronização das skills e configuração do Achilles,
+é automático. Combos nascem desativados e só são criados quando declarados em
+`combos-config.json`.
+
+O setup cria uma única AppKey `omniroute-setup`, com escopo `manage`, e a grava
+como `OMNIROUTE_API_KEY` no `.env` privado e no ambiente do usuário. O escopo
+administrativo não desativa a contabilização: inferências feitas pelo Achilles
+continuam atribuídas ao ID dessa chave, incluindo requisições, tokens e custo.
+Assim o mesmo segredo atende setup e IDE sem uma segunda etapa manual.
 
 No modo container, o setup também instala o GitHub CLI quando necessário e
 verifica `gh auth status`, permitindo que o sincronizador acesse um repositório
 privado de skills. Em `-NonInteractive`, o instalador informa o comando de login
 e pode ser reexecutado depois sem perder o restante da configuração.
+Depois de criar a AppKey, o instalador executa uma sincronização obrigatória
+dentro do próprio container. A instalação falha com diagnóstico acionável se o
+token não acessar o repositório ou se nenhuma entrada `pat-*` aparecer na API;
+só então a atualização periódica é iniciada.
 
 ## Arquitetura
 
 No modo container:
 
 - `diegosouzapw/omniroute:3.8.48`: imagem oficial, sem toolchains de build.
-- `omniroute-skills-sync:1`: Alpine + Git, atualiza as skills a cada hora.
-- volumes nomeados preservam banco e skills do OmniRoute.
+- `agent-skills-sync:1`: converte o repositório de governança em skills
+  canônicas globais do Caveman e reconcilia a cada hora.
+- o volume nomeado preserva o banco do OmniRoute; as skills ficam no diretório
+  global `~/.cave/skills` do host.
 - a porta `20128` fica disponível no host. A APPKEY continua obrigatória.
 - reexecuções mantêm apenas uma AppKey chamada `omniroute-setup`; duplicatas
   antigas criadas pelo próprio instalador são removidas sem afetar chaves de
   terceiros.
+- RTK é o único compressor habilitado no gateway; Caveman e os demais motores
+  permanecem desligados para não comprimir duas vezes.
+- a CA corporativa só é montada quando detectada ou fornecida explicitamente.
 
 No modo local:
 
@@ -133,10 +152,14 @@ permanece intacta para rollback. Os atalhos antigos só são removidos depois da
 criação bem-sucedida dos atalhos Achilles.
 
 O catálogo de IA não é congelado no instalador. Achilles consulta `/v1/models`
-do OmniRoute e permite escolher dinamicamente os combos e modelos expostos pelo
-gateway, sem alterar `combos-config.json`. O resultado é cruzado com
-`/api/providers`: combos continuam disponíveis, mas modelos diretos aparecem
-somente para providers conectados pelo usuário.
+do OmniRoute e permite escolher dinamicamente os combos declarados e modelos
+expostos pelo gateway. Ofertas sem autenticação ficam em `blockedProviders`;
+conexões e combos criados pelo usuário são preservados.
+
+O sincronizador não publica documentos em `/api/skills` do OmniRoute. Ele
+materializa `pat-*/SKILL.md` em `~/.cave/skills`, onde o Caveman faz descoberta
+progressiva nativa: nome e descrição para seleção, conteúdo completo somente sob
+demanda. Nenhum projeto consumidor precisa clonar o repositório de templates.
 
 Ao final da instalação, o setup valida executável, launcher, versão ativa,
 configuração dinâmica, origem da AppKey e filtro de providers. Uma falha nessa

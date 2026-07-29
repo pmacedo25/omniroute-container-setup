@@ -14,7 +14,8 @@ param(
     [switch]$NonInteractive,
     [Alias("SkipOpenRouterAI")]
     [switch]$SkipAchilles,
-    [switch]$SkipProviderLogin
+    [switch]$SkipProviderLogin,
+    [string]$CorporateCAPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,6 +61,7 @@ $setupOptions = @{
     NonInteractive    = $NonInteractive.IsPresent
     SkipAchilles  = $SkipAchilles.IsPresent
     SkipProviderLogin = $SkipProviderLogin.IsPresent
+    CorporateCAPath = $CorporateCAPath
 }
 
 Invoke-OmniRouteSetup @setupOptions
