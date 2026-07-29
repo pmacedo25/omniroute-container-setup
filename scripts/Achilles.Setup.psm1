@@ -57,7 +57,13 @@ function Write-AchillesSettings {
     $stateDirectory = Join-Path $HomeDirectory $script:AchillesStateDirectoryName
     New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
     $baseUrl = "http://127.0.0.1:$OmniRoutePort/v1"
-    $apiKey = $env:OMNIROUTE_API_KEY
+    $apiKey = [Environment]::GetEnvironmentVariable("OMNIROUTE_API_KEY", "User")
+    if ([string]::IsNullOrWhiteSpace($apiKey)) {
+        $apiKey = $env:OMNIROUTE_API_KEY
+    }
+    if ([string]::IsNullOrWhiteSpace($apiKey)) {
+        throw "OMNIROUTE_API_KEY não está configurada para o Achilles."
+    }
     $models = @(
         [ordered]@{ id = "combo-coding"; name = "combo-coding"; url = $baseUrl; apiKey = $apiKey; enableStreaming = $true },
         [ordered]@{ id = "combo-refining"; name = "combo-refining"; url = $baseUrl; apiKey = $apiKey; enableStreaming = $true },

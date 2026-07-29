@@ -187,6 +187,7 @@ try {
     Assert-True ($envExampleSource -notmatch 'OMNIROUTE_MANAGEMENT_API_KEY') "Ambiente não deve criar uma segunda AppKey administrativa"
     Assert-True ($moduleSource -match 'function Save-SharedAppKey') "Setup deve compartilhar a AppKey rastreável com o Achilles"
     Assert-True ($moduleSource -match 'SetEnvironmentVariable\("OMNIROUTE_API_KEY", \$AppKey, "User"\)') "A AppKey criada no bootstrap deve alimentar a IDE"
+    Assert-True ($achillesModuleSource -match 'GetEnvironmentVariable\("OMNIROUTE_API_KEY", "User"\)') "Atualização da IDE deve usar a AppKey atual do usuário, não uma cópia obsoleta do processo"
     Assert-True ($moduleSource -notmatch 'Ensure-AchillesAppKey|AppKey do Achilles') "Instalador não deve solicitar uma segunda AppKey"
     Assert-True ($composeSource -notmatch 'condition:\s+service_healthy|OMNIROUTE_URL|/api/skills') "Skills não devem depender da API do OmniRoute"
     Assert-True ($composeSource -match 'CAVEMAN_SKILLS_DIR') "Skills devem ser materializadas no diretório global do Caveman"
