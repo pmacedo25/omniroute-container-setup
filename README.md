@@ -18,6 +18,13 @@ Abra o **PowerShell** como usuário normal e execute:
 irm https://raw.githubusercontent.com/pmacedo25/omniroute-container-setup/master/install.ps1 | iex
 ```
 
+Para atualizar somente OmniRoute, skills e configurações, sem baixar ou
+reinstalar o Achilles:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/pmacedo25/omniroute-container-setup/master/install.ps1))) -SkipAchilles
+```
+
 Esse é o fluxo recomendado para primeira instalação e atualização. Não é
 necessário clonar o repositório, instalar Git previamente ou abrir o terminal
 como administrador. O comando usa somente endpoints públicos do GitHub:

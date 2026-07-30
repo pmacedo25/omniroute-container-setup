@@ -1,4 +1,18 @@
-﻿$ErrorActionPreference = "Stop"
+﻿[CmdletBinding()]
+param(
+    [string]$SkillsRepository,
+    [string]$SkillsBranch,
+    [int]$Port,
+    [string]$AchillesRepository,
+    [string]$AchillesVersion,
+    [string]$AchillesArtifactPath,
+    [switch]$NonInteractive,
+    [switch]$SkipAchilles,
+    [switch]$SkipProviderLogin,
+    [string]$CorporateCAPath
+)
+
+$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 [Console]::InputEncoding = $utf8
@@ -79,7 +93,32 @@ try {
     }
 
     Write-Host "Iniciando o instalador assistido..." -ForegroundColor Green
-    & $windowsPowerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $setupPath
+    $setupArguments = @(
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $setupPath
+    )
+    foreach ($parameter in @(
+        @{ Name = "SkillsRepository"; Value = $SkillsRepository },
+        @{ Name = "SkillsBranch"; Value = $SkillsBranch },
+        @{ Name = "Port"; Value = $(if ($PSBoundParameters.ContainsKey("Port")) { [string]$Port } else { "" }) },
+        @{ Name = "AchillesRepository"; Value = $AchillesRepository },
+        @{ Name = "AchillesVersion"; Value = $AchillesVersion },
+        @{ Name = "AchillesArtifactPath"; Value = $AchillesArtifactPath },
+        @{ Name = "CorporateCAPath"; Value = $CorporateCAPath }
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$parameter.Value)) {
+            $setupArguments += "-$($parameter.Name)", [string]$parameter.Value
+        }
+    }
+    foreach ($switchName in @("NonInteractive", "SkipAchilles", "SkipProviderLogin")) {
+        if ($PSBoundParameters.ContainsKey($switchName) -and
+            [bool]$PSBoundParameters[$switchName]) {
+            $setupArguments += "-$switchName"
+        }
+    }
+    & $windowsPowerShell @setupArguments
     if ($LASTEXITCODE -ne 0) {
         throw "O instalador terminou com o código $LASTEXITCODE."
     }
