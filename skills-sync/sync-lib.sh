@@ -190,7 +190,9 @@ write_existing_skill() {
     tags="$(derive_tags "$relative_path")"
     skill_dir="$output_root/$id"
     mkdir -p "$skill_dir"
-    cp "$source_file" "$skill_dir/SKILL.md"
+    # Preserve scripts, references and assets that are part of a canonical
+    # .github/skills/<name> package, not only its SKILL.md entrypoint.
+    cp -R "$(dirname "$source_file")/." "$skill_dir/"
 
     hash="$(sha256sum "$skill_dir/SKILL.md" | awk '{print $1}')"
     jq -nc \

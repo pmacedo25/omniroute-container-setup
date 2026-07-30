@@ -59,7 +59,7 @@ Modo automático em contêiner:
 
 ```powershell
 .\setup-interativo.ps1 -Mode container -NonInteractive `
-  -SkillsRepository "https://github.com/sua-organizacao/seu-repositorio-skills.git" `
+  -SkillsRepository "nio-internet/agents-templates" `
   -SkipProviderLogin
 ```
 
@@ -71,7 +71,8 @@ Modo local:
 
 Parâmetros úteis:
 
-- `-SkillsRepository <URL>` e `-SkillsBranch <nome>`
+- `-SkillsRepository <owner/repo|URL>` (padrão:
+  `nio-internet/agents-templates`) e `-SkillsBranch <nome>`
 - `-SkillsPath <caminho relativo>` quando as skills estiverem em uma pasta
   específica; vazio autodetecta `.github/skills`, `.agents` ou `AGENTS.md`
 - `-Port 20128`

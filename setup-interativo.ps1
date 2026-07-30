@@ -2,7 +2,7 @@
 param(
     [ValidateSet("container", "local")]
     [string]$Mode,
-    [string]$SkillsRepository,
+    [string]$SkillsRepository = "nio-internet/agents-templates",
     [string]$SkillsBranch = "main",
     [string]$SkillsPath,
     [int]$Port = 20128,
@@ -32,21 +32,6 @@ if ([string]::IsNullOrWhiteSpace($Mode)) {
         Write-Host "OmniRoute: selecione o modo [1=container, 2=local] (padrão: 1)"
         $selection = Read-Host
         $Mode = if ($selection -eq "2") { "local" } else { "container" }
-    }
-}
-
-if ([string]::IsNullOrWhiteSpace($SkillsRepository)) {
-    if ($NonInteractive) {
-        throw "O parâmetro -SkillsRepository é obrigatório no modo não interativo."
-    } else {
-        do {
-            Write-Host "Informe a URL Git do repositório de skills (obrigatório)"
-            $repositoryInput = Read-Host "URL"
-            $SkillsRepository = $repositoryInput.Trim()
-            if ([string]::IsNullOrWhiteSpace($SkillsRepository)) {
-                Write-Host "A URL do repositório de skills não pode ficar vazia." -ForegroundColor Yellow
-            }
-        } while ([string]::IsNullOrWhiteSpace($SkillsRepository))
     }
 }
 

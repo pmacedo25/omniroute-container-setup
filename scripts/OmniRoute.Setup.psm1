@@ -200,6 +200,19 @@ function Sync-SkillsRepository {
     Invoke-External "git" @("clone", "--depth", "1", "--branch", $Branch, $Repository, $Destination) "Falha ao clonar as skills"
 }
 
+function Resolve-SkillsRepositoryUrl {
+    param([string]$Repository)
+    $value = ([string]$Repository).Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw "O repositório de skills não pode ficar vazio."
+    }
+    if ($value -match '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\.git)?$') {
+        $slug = $value -replace '\.git$', ''
+        return "https://github.com/$slug.git"
+    }
+    return $value
+}
+
 function Wait-HttpReady {
     param([string]$Url, [int]$TimeoutSeconds = 120)
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
@@ -802,7 +815,7 @@ function Start-ValidatedSkillsSync {
         Invoke-External $Engine @("compose", "build", "skills-sync") `
             "Falha ao preparar o sincronizador de skills"
         Invoke-External $Engine @("compose", "run", "--rm", "--no-deps", "-e", "SKILLS_SYNC_ONCE=true", "skills-sync") `
-            "O container não conseguiu acessar e materializar o repositório de skills. Verifique o login do GitHub e o acesso ao repositório."
+            "O container não conseguiu acessar e materializar o repositório de skills. Para repositórios INTERNAL, confirme o login do GitHub CLI, o acesso à organização e a autorização SSO do token."
         $managedCount = @(Get-ChildItem -LiteralPath $SkillsDirectory -Directory -Filter "pat-*" |
             Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "SKILL.md") }).Count
         if ($managedCount -eq 0) {
@@ -868,6 +881,7 @@ function Invoke-OmniRouteSetup {
         [bool]$SkipProviderLogin,
         [AllowEmptyString()][string]$CorporateCAPath
     )
+    $SkillsRepository = Resolve-SkillsRepositoryUrl -Repository $SkillsRepository
     $homeDirectory = $env:USERPROFILE
     $stateDirectory = Join-Path $homeDirectory ".omniroute"
     $envPath = if ($Mode -eq "container") { Join-Path $SetupDirectory ".env" } else { Join-Path $stateDirectory ".env" }
@@ -953,4 +967,4 @@ function Invoke-OmniRouteSetup {
     Write-SetupMessage "OmniRoute disponível em $baseUrl; configuração concluída." "OK"
 }
 
-Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Sync-SkillsRepository, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup
+Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Sync-SkillsRepository, Resolve-SkillsRepositoryUrl, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup

@@ -50,6 +50,7 @@ test -f "$test_root/output/user-owned/SKILL.md"
 # Repositories that already use the standard .github/skills/<name>/SKILL.md
 # layout must be copied without nested or rewritten frontmatter.
 mkdir -p "$test_root/source/.github/skills/pipfile-review"
+mkdir -p "$test_root/source/.github/skills/pipfile-review/assets"
 cat > "$test_root/source/.github/skills/pipfile-review/SKILL.md" <<'EOF'
 ---
 name: pipfile-review
@@ -58,6 +59,8 @@ description: Revise Pipfile e Pipfile.lock, dependências, índices e reprodutib
 
 # Pipfile review
 EOF
+printf '%s\n' 'fixture asset' > \
+    "$test_root/source/.github/skills/pipfile-review/assets/example.txt"
 SKILLS_PATH=".github/skills"
 export SKILLS_PATH
 run_sync
@@ -66,6 +69,8 @@ test "$(jq -r '.skills[] | select(.id == "pat-pipfile-review") | .description' "
     "Revise Pipfile e Pipfile.lock, dependências, índices e reprodutibilidade."
 cmp "$test_root/source/.github/skills/pipfile-review/SKILL.md" \
     "$test_root/output/pat-pipfile-review/SKILL.md"
+cmp "$test_root/source/.github/skills/pipfile-review/assets/example.txt" \
+    "$test_root/output/pat-pipfile-review/assets/example.txt"
 test -f "$test_root/output/user-owned/SKILL.md"
 test ! -e "$test_root/output/pat-task-workflows-testing"
 

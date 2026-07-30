@@ -49,6 +49,12 @@ try {
     Assert-Equal "C:\Tools" (Get-PathWithEntry -CurrentPath $null -Entry "C:\Tools") "PATH nulo deve ser suportado"
     Assert-Equal "C:\Windows;C:\Tools" (Get-PathWithEntry -CurrentPath "C:\Windows" -Entry "C:\Tools") "Entrada deve ser adicionada"
     Assert-Equal "C:\Windows;C:\Tools" (Get-PathWithEntry -CurrentPath "C:\Windows;C:\Tools" -Entry "c:\tools\") "Entrada não pode duplicar"
+    Assert-Equal "https://github.com/nio-internet/agents-templates.git" `
+        (Resolve-SkillsRepositoryUrl "nio-internet/agents-templates") `
+        "Slug corporativo deve ser convertido para HTTPS"
+    Assert-Equal "https://git.example.com/team/skills.git" `
+        (Resolve-SkillsRepositoryUrl "https://git.example.com/team/skills.git") `
+        "URL Git completa deve ser preservada"
 
     $testLauncher = Join-Path $testRoot ".achilles\Achilles.ps1"
     New-Item -ItemType Directory -Path (Split-Path -Parent $testLauncher) -Force | Out-Null
@@ -115,10 +121,9 @@ try {
     Assert-True ($moduleSource -notmatch "taskkill\s+/F\s+/IM\s+node") "Não pode encerrar todos os processos Node"
     Assert-True ($moduleSource -notmatch "Remove-Item.+sqlite") "Reexecução não pode apagar SQLite"
     Assert-True ($setupSource -notmatch "Read-Host.+APPKEY") "APPKEY deve ser automática"
-    Assert-True ($setupSource -match "URL.+repositório de skills") "Setup deve solicitar o repositório de skills"
-    Assert-True ($setupSource -match 'SkillsRepository é obrigatório no modo não interativo') "Modo automático deve exigir o repositório de skills"
-    Assert-True ($setupSource -match 'do \{[\s\S]+Read-Host "URL"[\s\S]+\} while') "Modo assistido deve repetir a pergunta até receber uma URL"
-    Assert-True ($setupSource -notmatch 'defaultSkillsRepository') "Setup não deve manter repositório padrão de skills"
+    Assert-True ($setupSource -match 'SkillsRepository = "nio-internet/agents-templates"') "Setup deve usar o repositório corporativo de skills por padrão"
+    Assert-True ($moduleSource -match 'function Resolve-SkillsRepositoryUrl') "Setup deve aceitar owner/repo e URL Git completa"
+    Assert-True ($moduleSource -match 'https://github\.com/\$slug\.git') "Slug GitHub deve ser normalizado para clone HTTPS"
     Assert-True ($bootstrapSource -match 'releases/latest') "Bootstrap deve instalar um release estável"
     Assert-True ($bootstrapSource -match '"\.omniroute"') "Bootstrap deve usar o estado persistente do OmniRoute"
     Assert-True ($bootstrapSource -match '\$installDirectory.+Join-Path \$stateDirectory "setup"') "Bootstrap deve persistir os arquivos para reexecução"
@@ -203,6 +208,7 @@ try {
     Assert-True ($composeSource -notmatch 'condition:\s+service_healthy|OMNIROUTE_URL|/api/skills') "Skills não devem depender da API do OmniRoute"
     Assert-True ($composeSource -match 'CAVEMAN_SKILLS_DIR') "Skills devem ser materializadas no diretório global do Caveman"
     Assert-True ($moduleSource -match 'Start-ValidatedSkillsSync[\s\S]+SKILLS_SYNC_ONCE=true') "Instalador deve validar a primeira sincronização no container"
+    Assert-True ($moduleSource -match 'autorização SSO do token') "Erro de repositório INTERNAL deve orientar sobre autorização organizacional"
     Assert-True ($moduleSource -match "managedCount.+-eq 0") "Instalação deve falhar quando nenhuma skill for publicada"
     Assert-True ($moduleSource -notmatch 'Remove-LegacyOmniSkills|/api/skills') "Setup não deve depender do executor de skills do OmniRoute"
     Assert-True ($composeSource -notmatch 'omniroute-skills') "Compose não deve recriar o volume omniroute-skills removido"
