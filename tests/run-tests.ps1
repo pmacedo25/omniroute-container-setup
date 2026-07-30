@@ -17,6 +17,14 @@ function Assert-Equal {
     if ($Expected -ne $Actual) { throw "ASSERT FAILED: $Message. Expected='$Expected'; Actual='$Actual'" }
 }
 
+function Assert-Utf8WithoutBom {
+    param([string]$Path, [string]$Message)
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    $hasUtf8Bom = $bytes.Length -ge 3 -and
+        $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+    Assert-True (-not $hasUtf8Bom) $Message
+}
+
 if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $testRoot | Out-Null
 
@@ -70,6 +78,8 @@ try {
 
     $achillesConfig = Write-AchillesConfiguration -HomeDirectory $testRoot `
         -OmniRoutePort 20128
+    Assert-Utf8WithoutBom $achillesConfig `
+        "Config do Achilles deve ser UTF-8 sem BOM para o JSON.parse do Node"
     $achillesSettings = Get-Content -LiteralPath $achillesConfig -Raw | ConvertFrom-Json
     Assert-Equal "http://127.0.0.1:20128/v1" $achillesSettings.omnirouteBaseUrl "IDE deve usar loopback do host"
     Assert-Equal "http://127.0.0.1:20128/v1/models" $achillesSettings.omnirouteCatalogUrl "IDE deve consultar catálogo dinâmico"
@@ -183,6 +193,7 @@ try {
     Assert-True ($setupSource -match 'AchillesRepository = "pmacedo25/Achilles-Releases"') "Script principal deve encaminhar o repositório público"
     Assert-True ($envExampleSource -match 'ACHILLES_REPOSITORY=pmacedo25/Achilles-Releases') "Exemplo de ambiente deve usar o repositório público"
     Assert-True ($achillesModuleSource -match 'api\.github\.com/repos/\$Repository/releases') "Release público deve ser consultado sem GitHub CLI"
+    Assert-True ($achillesModuleSource -match 'function Set-Utf8JsonFile') "JSONs do Achilles devem usar escritor UTF-8 sem BOM"
     Assert-True ($achillesModuleSource -match '\$artifactAsset\.digest') "Checksum deve usar o digest oficial do asset no GitHub"
     Assert-True ($achillesModuleSource -match 'Remove-Item.+SHA256SUMS') "Metadados de checksum de releases anteriores devem ser removidos"
     Assert-True ($achillesModuleSource -notmatch 'GitHub CLI é necessário para baixar') "Download público do Achilles não deve exigir autenticação"

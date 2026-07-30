@@ -17,6 +17,17 @@ function Write-AchillesMessage {
     Write-Host "[$Level] $Message" -ForegroundColor $color
 }
 
+function Set-Utf8JsonFile {
+    param([string]$Path, [string]$Json)
+    # Node's JSON.parse does not ignore a UTF-8 BOM. Windows PowerShell 5 adds
+    # one for `Set-Content -Encoding utf8`, so write JSON explicitly without it.
+    [System.IO.File]::WriteAllText(
+        $Path,
+        $Json,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+}
+
 function Get-AchillesArchitecture {
     $architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
     if ($architecture -ne "x64") {
@@ -44,7 +55,8 @@ function Write-AchillesConfiguration {
     }
     $configPath = Join-Path $stateDirectory "config.json"
     $temporaryPath = "$configPath.new"
-    $configuration | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $temporaryPath -Encoding utf8
+    Set-Utf8JsonFile -Path $temporaryPath `
+        -Json ($configuration | ConvertTo-Json -Depth 10)
     Move-Item -LiteralPath $temporaryPath -Destination $configPath -Force
     return $configPath
 }
@@ -76,7 +88,8 @@ function Write-AchillesSettings {
     }
     $settingsPath = Join-Path $stateDirectory "settings.json"
     $temporaryPath = "$settingsPath.new"
-    $settings | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $temporaryPath -Encoding utf8
+    Set-Utf8JsonFile -Path $temporaryPath `
+        -Json ($settings | ConvertTo-Json -Depth 10)
     Move-Item -LiteralPath $temporaryPath -Destination $settingsPath -Force
     return $settingsPath
 }
@@ -118,11 +131,13 @@ function Copy-AchillesLegacyState {
 
     $migrationPath = Join-Path $stateDirectory "migration.json"
     if (-not (Test-Path -LiteralPath $migrationPath -PathType Leaf)) {
-        [ordered]@{
+        $migrationRecord = [ordered]@{
             source = $legacyStateDirectory
             migratedAt = [DateTime]::UtcNow.ToString("o")
             legacyStatePreserved = $true
-        } | ConvertTo-Json | Set-Content -LiteralPath "$migrationPath.new" -Encoding utf8
+        }
+        Set-Utf8JsonFile -Path "$migrationPath.new" `
+            -Json ($migrationRecord | ConvertTo-Json)
         Move-Item -LiteralPath "$migrationPath.new" -Destination $migrationPath
     }
     return $true
@@ -430,12 +445,14 @@ function Install-Achilles {
     Write-AchillesSettings -HomeDirectory $HomeDirectory -OmniRoutePort $OmniRoutePort | Out-Null
     $currentPath = Join-Path $stateDirectory "current.json"
     $currentTemporaryPath = "$currentPath.new"
-    [ordered]@{
+    $currentRecord = [ordered]@{
         version = $resolvedVersion
         executable = $executablePath
         config = $configPath
         installedAt = [DateTime]::UtcNow.ToString("o")
-    } | ConvertTo-Json | Set-Content -LiteralPath $currentTemporaryPath -Encoding utf8
+    }
+    Set-Utf8JsonFile -Path $currentTemporaryPath `
+        -Json ($currentRecord | ConvertTo-Json)
     Move-Item -LiteralPath $currentTemporaryPath -Destination $currentPath -Force
 
     $iconPath = Join-Path $stateDirectory "Achilles.ico"
