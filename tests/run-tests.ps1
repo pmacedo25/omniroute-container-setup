@@ -123,7 +123,15 @@ try {
     Assert-True $checksumRejected "Checksum adulterado deve ser rejeitado"
 
     $setupSource = Get-Content (Join-Path $projectDirectory "setup-interativo.ps1") -Raw
-    $bootstrapSource = Get-Content (Join-Path $projectDirectory "install.ps1") -Raw
+    $bootstrapPath = Join-Path $projectDirectory "install.ps1"
+    $bootstrapSource = Get-Content $bootstrapPath -Raw
+    Assert-Utf8WithoutBom $bootstrapPath `
+        "Bootstrap executado por irm | iex deve ser UTF-8 sem BOM"
+    try {
+        [void][scriptblock]::Create($bootstrapSource)
+    } catch {
+        throw "ASSERT FAILED: conteúdo do bootstrap deve ser aceito por irm | iex. $($_.Exception.Message)"
+    }
     $envExampleSource = Get-Content (Join-Path $projectDirectory ".env.example") -Raw
     $moduleSource = Get-Content (Join-Path $projectDirectory "scripts\OmniRoute.Setup.psm1") -Raw
     $achillesModuleSource = Get-Content (Join-Path $projectDirectory "scripts\Achilles.Setup.psm1") -Raw
