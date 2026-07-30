@@ -13,9 +13,9 @@
       "description": "Tarefas econômicas, testes e exploração rápida.",
       "strategy": "priority",
       "models": [
-        "antigravity/gemini-3.1-flash-lite",
-        "cx/gpt-5.3-codex-spark",
-        "antigravity/gpt-oss-120b-medium"
+        "github/gemini-3.1-pro-preview",
+        "claude/claude-haiku-4-5-20251001",
+        "github/claude-haiku-4.5"
       ],
       "config": {
         "compressionMode": "rtk",
@@ -28,9 +28,9 @@
       "description": "Implementação e manutenção de código com equilíbrio entre custo e qualidade.",
       "strategy": "priority",
       "models": [
-        "antigravity/gemini-3.1-pro-low",
-        "cx/gpt-5.5-medium",
-        "antigravity/claude-sonnet-4-6"
+        "github/gpt-5.3-codex",
+        "claude/claude-sonnet-4-6",
+        "github/claude-sonnet-4.6"
       ],
       "config": {
         "compressionMode": "rtk",
@@ -43,9 +43,9 @@
       "description": "Refinamento, revisão e decisões que exigem maior qualidade.",
       "strategy": "priority",
       "models": [
-        "cx/gpt-5.5-high",
-        "antigravity/claude-sonnet-4-6",
-        "antigravity/gemini-3.1-pro-high"
+        "claude/claude-sonnet-4-6",
+        "claude/claude-sonnet-5",
+        "github/gpt-5.3-codex"
       ],
       "config": {
         "compressionMode": "rtk",

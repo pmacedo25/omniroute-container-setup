@@ -39,6 +39,10 @@ try {
     Assert-True (@($combos.combos | ForEach-Object name) -contains "combo-coding") "Manifesto deve criar combo-coding"
     Assert-True (@($combos.combos | ForEach-Object strategy | Select-Object -Unique) -notcontains "auto") "Combos não devem usar estratégia auto"
     Assert-True (@($combos.combos | ForEach-Object { $_.config.compressionMode } | Select-Object -Unique) -notcontains "stacked") "Combos OmniRoute não devem habilitar Caveman"
+    $configuredModels = @($combos.combos | ForEach-Object models)
+    Assert-True (@($configuredModels | Where-Object { $_ -like "claude/*" }).Count -gt 0) "Combos devem manter modelos da conta Claude"
+    Assert-True (@($configuredModels | Where-Object { $_ -like "github/*" }).Count -gt 0) "Combos devem manter modelos da conta GitHub Copilot"
+    Assert-True (@($configuredModels | Where-Object { $_ -like "antigravity/*" -or $_ -like "cx/*" }).Count -eq 0) "Combos não devem depender de providers fora de Claude e GitHub Copilot"
     Assert-True (@($combos.managedNames) -contains "combo-coding") "Manifesto deve reconhecer e limpar combos legados"
     Assert-True (Test-Path (Join-Path $projectDirectory "benchmarks\README.md")) "Matriz de benchmark deve estar versionada"
 
