@@ -47,11 +47,34 @@ printf '%s\n' '# User skill' > "$test_root/output/user-owned/SKILL.md"
 run_sync
 test -f "$test_root/output/user-owned/SKILL.md"
 
+# Repositories that already use the standard .github/skills/<name>/SKILL.md
+# layout must be copied without nested or rewritten frontmatter.
+mkdir -p "$test_root/source/.github/skills/pipfile-review"
+cat > "$test_root/source/.github/skills/pipfile-review/SKILL.md" <<'EOF'
+---
+name: pipfile-review
+description: Revise Pipfile e Pipfile.lock, dependências, índices e reprodutibilidade.
+---
+
+# Pipfile review
+EOF
+SKILLS_PATH=".github/skills"
+export SKILLS_PATH
+run_sync
+test "$(jq -r '.skills | length' "$catalog")" = "2"
+test "$(jq -r '.skills[] | select(.id == "pat-pipfile-review") | .description' "$catalog")" = \
+    "Revise Pipfile e Pipfile.lock, dependências, índices e reprodutibilidade."
+cmp "$test_root/source/.github/skills/pipfile-review/SKILL.md" \
+    "$test_root/output/pat-pipfile-review/SKILL.md"
+test -f "$test_root/output/user-owned/SKILL.md"
+test ! -e "$test_root/output/pat-task-workflows-testing"
+
 # A source failure must preserve the last valid catalog instead of publishing
 # an empty replacement.
 previous_hash="$(sha256sum "$catalog" | awk '{print $1}')"
 SKILLS_SOURCE_DIR="$test_root/missing"
-export SKILLS_SOURCE_DIR
+SKILLS_PATH=""
+export SKILLS_SOURCE_DIR SKILLS_PATH
 if run_sync; then
     log "Fonte ausente deveria falhar."
     exit 1

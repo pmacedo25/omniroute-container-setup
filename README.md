@@ -72,6 +72,8 @@ Modo local:
 Parâmetros úteis:
 
 - `-SkillsRepository <URL>` e `-SkillsBranch <nome>`
+- `-SkillsPath <caminho relativo>` quando as skills estiverem em uma pasta
+  específica; vazio autodetecta `.github/skills`, `.agents` ou `AGENTS.md`
 - `-Port 20128`
 - `-SkipAchilles` para instalar somente o gateway
 - `-AchillesVersion <semver|latest>`
@@ -156,8 +158,9 @@ do OmniRoute e permite escolher dinamicamente os combos declarados e modelos
 expostos pelo gateway. Ofertas sem autenticação ficam em `blockedProviders`;
 conexões e combos criados pelo usuário são preservados.
 
-O sincronizador não publica documentos em `/api/skills` do OmniRoute. Ele
-materializa `pat-*/SKILL.md` em `~/.cave/skills`, onde o Caveman faz descoberta
+O sincronizador não instala, remove nem publica documentos em `/api/skills` do
+OmniRoute e não usa o antigo volume `omniroute-skills`. Ele materializa
+`pat-*/SKILL.md` em `~/.cave/skills`, onde o Caveman faz descoberta
 progressiva nativa: nome e descrição para seleção, conteúdo completo somente sob
 demanda. Nenhum projeto consumidor precisa clonar o repositório de templates.
 

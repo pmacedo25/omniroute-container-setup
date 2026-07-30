@@ -806,7 +806,7 @@ function Start-ValidatedSkillsSync {
         $managedCount = @(Get-ChildItem -LiteralPath $SkillsDirectory -Directory -Filter "pat-*" |
             Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "SKILL.md") }).Count
         if ($managedCount -eq 0) {
-            throw "A sincronização terminou sem criar skills em '$SkillsDirectory'. Confira se o repositório contém AGENTS.md ou arquivos .agents/**/*.md."
+            throw "A sincronização terminou sem criar skills em '$SkillsDirectory'. Confira OMNIROUTE_SKILLS_PATH e se o repositório contém SKILL.md, AGENTS.md ou .agents/**/*.md."
         }
         Invoke-External $Engine @("compose", "up", "-d", "--no-deps", "--force-recreate", "skills-sync") `
             "A primeira sincronização funcionou, mas não foi possível iniciar a atualização periódica"
@@ -814,21 +814,6 @@ function Start-ValidatedSkillsSync {
     } finally {
         $env:COMPOSE_CONVERT_WINDOWS_PATHS = $previousPathConversion
         Pop-Location
-    }
-}
-
-function Remove-LegacyOmniSkills {
-    param([string]$BaseUrl, [string]$AppKey)
-    $headers = @{ Authorization = "Bearer $AppKey" }
-    $response = Invoke-RestMethod -Uri "$BaseUrl/api/skills?source=local&limit=200" `
-        -Headers $headers -TimeoutSec 20 -ErrorAction Stop
-    $legacy = @($response.skills | Where-Object { $_.name -like "pat-*" })
-    foreach ($skill in $legacy) {
-        Invoke-RestMethod -Uri "$BaseUrl/api/skills/$($skill.id)" -Method Delete `
-            -Headers $headers -TimeoutSec 20 -ErrorAction Stop | Out-Null
-    }
-    if ($legacy.Count -gt 0) {
-        Write-SetupMessage "$($legacy.Count) skill(s) instrucionais legadas removidas do executor Omni Skills." "OK"
     }
 }
 
@@ -846,11 +831,11 @@ function Restart-ContainerGateway {
 function Start-LocalMode {
     param([string]$HomeDirectory, [int]$Port, [string]$EnvPath)
     try {
-        Invoke-External "npm" @("install", "--global", "omniroute@3.8.48", "--no-audit", "--no-fund") "Falha ao instalar o OmniRoute"
+        Invoke-External "npm" @("install", "--global", "omniroute@3.8.49", "--no-audit", "--no-fund") "Falha ao instalar o OmniRoute"
     } catch {
         Write-SetupMessage "O pacote exigiu compilação nativa; instalando Python/C++ e tentando novamente." "WARN"
         Install-NativeBuildTools
-        Invoke-External "npm" @("install", "--global", "omniroute@3.8.48", "--no-audit", "--no-fund") "Falha ao instalar o OmniRoute após preparar o toolchain"
+        Invoke-External "npm" @("install", "--global", "omniroute@3.8.49", "--no-audit", "--no-fund") "Falha ao instalar o OmniRoute após preparar o toolchain"
     }
     $taskName = "OmniRoute Gateway"
     $omnirouteCommand = (Get-Command omniroute -ErrorAction Stop).Source
@@ -873,6 +858,7 @@ function Invoke-OmniRouteSetup {
         [string]$SetupDirectory,
         [string]$SkillsRepository,
         [string]$SkillsBranch,
+        [AllowEmptyString()][string]$SkillsPath,
         [int]$Port,
         [string]$AchillesRepository,
         [string]$AchillesVersion,
@@ -898,8 +884,10 @@ function Invoke-OmniRouteSetup {
         "PROJECTS_DIR"
     )
     Set-EnvValue $envPath "PORT" ([string]$Port)
+    Set-EnvValue $envPath "OMNIROUTE_VERSION" "3.8.49"
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_REPO" $SkillsRepository
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_BRANCH" $SkillsBranch
+    Set-EnvValue $envPath "OMNIROUTE_SKILLS_PATH" $SkillsPath
     $cavemanSkillsDirectory = Join-Path $homeDirectory ".cave\skills"
     New-Item -ItemType Directory -Path $cavemanSkillsDirectory -Force | Out-Null
     Set-EnvValue $envPath "CAVEMAN_SKILLS_DIR" $cavemanSkillsDirectory.Replace('\', '/')
@@ -929,7 +917,7 @@ function Invoke-OmniRouteSetup {
         -NonInteractive $NonInteractive -ContainerEngine $containerEngine
     $env:OMNIROUTE_API_KEY = $appKey
     if ($Mode -eq "container") {
-        # The API-key metadata cache in 3.8.48 is not invalidated when scopes
+        # The API-key metadata cache may not be invalidated when scopes
         # are patched during onboarding. Restart before the first management call.
         Restart-ContainerGateway -Engine $engine -SetupDirectory $SetupDirectory
         Wait-HttpReady -Url "$baseUrl/api/monitoring/health"
@@ -938,7 +926,6 @@ function Invoke-OmniRouteSetup {
         Start-ValidatedSkillsSync -Engine $engine -SetupDirectory $SetupDirectory `
             -SkillsDirectory $cavemanSkillsDirectory
     }
-    Remove-LegacyOmniSkills -BaseUrl $baseUrl -AppKey $appKey
     Set-TokenEfficiencyDefaults -BaseUrl $baseUrl -AppKey $appKey
 
     if (-not $SkipProviderLogin -and -not $NonInteractive) {

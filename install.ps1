@@ -41,9 +41,13 @@ try {
     $requiredFiles = @(
         "setup-interativo.ps1",
         "docker-compose.yml",
+        "combos-config.json",
         ".env.example",
         "scripts\OmniRoute.Setup.psm1",
-        "scripts\Achilles.Setup.psm1"
+        "scripts\Achilles.Setup.psm1",
+        "skills-sync\Dockerfile",
+        "skills-sync\entrypoint.sh",
+        "skills-sync\sync-lib.sh"
     )
     foreach ($requiredFile in $requiredFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $sourceDirectory $requiredFile) -PathType Leaf)) {

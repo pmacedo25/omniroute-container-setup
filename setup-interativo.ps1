@@ -4,6 +4,7 @@ param(
     [string]$Mode,
     [string]$SkillsRepository,
     [string]$SkillsBranch = "main",
+    [string]$SkillsPath,
     [int]$Port = 20128,
     [Alias("OpenRouterAIRepository")]
     [string]$AchillesRepository = "pmacedo25/Achilles-Releases",
@@ -54,6 +55,7 @@ $setupOptions = @{
     SetupDirectory    = $PSScriptRoot
     SkillsRepository  = $SkillsRepository
     SkillsBranch      = $SkillsBranch
+    SkillsPath        = $SkillsPath
     Port              = $Port
     AchillesRepository = $AchillesRepository
     AchillesVersion = $AchillesVersion

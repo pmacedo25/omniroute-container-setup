@@ -45,6 +45,7 @@ Outro agente pode consumir o mesmo diretório usando este contrato:
 | --- | --- | --- | --- |
 | `SKILLS_REPOSITORY` | sim | - | URL Git da fonte |
 | `SKILLS_BRANCH` | não | `main` | Branch da fonte |
+| `SKILLS_PATH` | não | autodetectado | Caminho relativo contendo `.github/skills`, skills canônicas ou documentos `.md` |
 | `CAVEMAN_SKILLS_DIR` | sim no Compose | - | Caminho global do host montado em `/skills` |
 | `SKILLS_SYNC_INTERVAL_SECONDS` | não | `3600` | Intervalo de reconciliação |
 | `GITHUB_TOKEN` | para fonte privada | - | Token usado só no header do Git |
@@ -53,8 +54,9 @@ O token Git não é escrito em URL, arquivo de credenciais ou catálogo.
 
 ## Criar e atualizar
 
-Qualquer novo `.md` em `.agents/` vira uma skill `pat-*` na sincronização
-seguinte; alterações substituem apenas a skill correspondente. Para atualizar
+Qualquer novo `.md` em `.agents/` ou `SKILL.md` no padrão
+`.github/skills/<nome>/` vira uma skill `pat-*` na sincronização seguinte;
+alterações substituem apenas a skill correspondente. Para atualizar
 imediatamente, reinicie o serviço:
 
 ```powershell

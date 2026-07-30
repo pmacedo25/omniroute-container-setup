@@ -159,6 +159,59 @@ write_canonical_skill() {
         }'
 }
 
+frontmatter_value() {
+    field="$1"
+    file="$2"
+    awk -v field="$field" '
+        NR == 1 && $0 ~ /^---[[:space:]]*$/ { frontmatter = 1; next }
+        frontmatter && $0 ~ /^---[[:space:]]*$/ { exit }
+        frontmatter && index($0, field ":") == 1 {
+            value = substr($0, length(field) + 2)
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            gsub(/^["'\'']|["'\'']$/, "", value)
+            print value
+            exit
+        }
+    ' "$file"
+}
+
+write_existing_skill() {
+    source_file="$1"
+    relative_path="$2"
+    output_root="$3"
+    id="$4"
+    title="$(frontmatter_value name "$source_file")"
+    [ -n "$title" ] || title="$(basename "$(dirname "$source_file")" | tr '-' ' ')"
+    summary="$(frontmatter_value description "$source_file")"
+    [ -n "$summary" ] || summary="$(extract_summary "$source_file")"
+    [ -n "$summary" ] ||
+        summary="Skill especializada de $title. Carregue automaticamente quando a tarefa corresponder a este contexto."
+    tags="$(derive_tags "$relative_path")"
+    skill_dir="$output_root/$id"
+    mkdir -p "$skill_dir"
+    cp "$source_file" "$skill_dir/SKILL.md"
+
+    hash="$(sha256sum "$skill_dir/SKILL.md" | awk '{print $1}')"
+    jq -nc \
+        --arg id "$id" \
+        --arg name "$title" \
+        --arg description "$summary" \
+        --arg tags "$tags" \
+        --arg sourcePath "$relative_path" \
+        --arg contentPath "$id/SKILL.md" \
+        --arg contentSha256 "$hash" \
+        '{
+            id: $id,
+            name: $name,
+            description: $description,
+            tags: ($tags | split(",") | map(select(length > 0))),
+            sourcePath: $sourcePath,
+            contentPath: $contentPath,
+            contentSha256: $contentSha256
+        }'
+}
+
 build_catalog() {
     source_dir="${SKILLS_SOURCE_DIR:-/state/source}"
     published_root="${SKILLS_OUTPUT_DIR:-/skills}"
@@ -168,15 +221,51 @@ build_catalog() {
     mkdir -p "$staging_skills"
     : > "$records"
 
-    find "$source_dir/.agents" -type f -name '*.md' -print 2>/dev/null |
-        LC_ALL=C sort |
+    requested_path="${SKILLS_PATH:-${OMNIROUTE_SKILLS_PATH:-}}"
+    scan_root="$source_dir"
+    if [ -n "$requested_path" ]; then
+        case "$requested_path" in
+            /*|*..*)
+                log "SKILLS_PATH deve ser relativo e não pode conter '..': $requested_path"
+                return 1
+                ;;
+        esac
+        if [ -d "$source_dir/$requested_path" ]; then
+            scan_root="$source_dir/$requested_path"
+        else
+            log "SKILLS_PATH não existe no repositório: $requested_path"
+            return 1
+        fi
+    elif [ -d "$source_dir/.github/skills" ]; then
+        scan_root="$source_dir/.github/skills"
+    elif [ -d "$source_dir/.agents" ]; then
+        scan_root="$source_dir/.agents"
+    fi
+
+    canonical_list="$staging_root/canonical-files.txt"
+    find "$scan_root" -type f -name 'SKILL.md' -print 2>/dev/null |
+        LC_ALL=C sort > "$canonical_list"
+
+    if [ -s "$canonical_list" ]; then
         while IFS= read -r source_file; do
             relative_path="${source_file#"$source_dir"/}"
-            id="pat-$(slugify "$(printf '%s' "${relative_path#".agents/"}" | sed -E 's/\.md$//')")"
-            write_canonical_skill "$source_file" "$relative_path" "$staging_skills" "$id" >> "$records"
-        done
+            skill_path="${source_file#"$scan_root"/}"
+            skill_name="$(printf '%s' "$skill_path" | sed -E 's#/SKILL\.md$##; s#^SKILL\.md$#skill#')"
+            id="pat-$(slugify "$skill_name")"
+            write_existing_skill "$source_file" "$relative_path" "$staging_skills" "$id" >> "$records"
+        done < "$canonical_list"
+    else
+        find "$scan_root" -type f -name '*.md' -print 2>/dev/null |
+            LC_ALL=C sort |
+            while IFS= read -r source_file; do
+                relative_path="${source_file#"$source_dir"/}"
+                skill_path="${source_file#"$scan_root"/}"
+                id="pat-$(slugify "$(printf '%s' "$skill_path" | sed -E 's/\.md$//')")"
+                write_canonical_skill "$source_file" "$relative_path" "$staging_skills" "$id" >> "$records"
+            done
+    fi
 
-    if [ -f "$source_dir/AGENTS.md" ]; then
+    if [ -f "$source_dir/AGENTS.md" ] && [ "$scan_root" != "$source_dir" ]; then
         write_canonical_skill \
             "$source_dir/AGENTS.md" \
             "AGENTS.md" \

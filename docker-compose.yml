@@ -2,7 +2,7 @@ name: omniroute-setup
 
 services:
   omniroute:
-    image: diegosouzapw/omniroute:${OMNIROUTE_VERSION:-3.8.48}
+    image: diegosouzapw/omniroute:${OMNIROUTE_VERSION:-3.8.49}
     container_name: omniroute
     restart: unless-stopped
     stop_grace_period: 40s
@@ -34,6 +34,7 @@ services:
     environment:
       SKILLS_REPOSITORY: ${OMNIROUTE_SKILLS_REPO}
       SKILLS_BRANCH: ${OMNIROUTE_SKILLS_BRANCH:-main}
+      SKILLS_PATH: ${OMNIROUTE_SKILLS_PATH:-}
       SKILLS_SYNC_INTERVAL_SECONDS: ${SKILLS_SYNC_INTERVAL_SECONDS:-3600}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     volumes:
