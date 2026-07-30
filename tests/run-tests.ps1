@@ -118,6 +118,7 @@ try {
     $moduleSource = Get-Content (Join-Path $projectDirectory "scripts\OmniRoute.Setup.psm1") -Raw
     $achillesModuleSource = Get-Content (Join-Path $projectDirectory "scripts\Achilles.Setup.psm1") -Raw
     $composeSource = Get-Content (Join-Path $projectDirectory "docker-compose.yml") -Raw
+    $skillsSyncSource = Get-Content (Join-Path $projectDirectory "skills-sync\sync-lib.sh") -Raw
     Assert-True ($moduleSource -notmatch "taskkill\s+/F\s+/IM\s+node") "Não pode encerrar todos os processos Node"
     Assert-True ($moduleSource -notmatch "Remove-Item.+sqlite") "Reexecução não pode apagar SQLite"
     Assert-True ($setupSource -notmatch "Read-Host.+APPKEY") "APPKEY deve ser automática"
@@ -182,6 +183,8 @@ try {
     Assert-True ($setupSource -match 'AchillesRepository = "pmacedo25/Achilles-Releases"') "Script principal deve encaminhar o repositório público"
     Assert-True ($envExampleSource -match 'ACHILLES_REPOSITORY=pmacedo25/Achilles-Releases') "Exemplo de ambiente deve usar o repositório público"
     Assert-True ($achillesModuleSource -match 'api\.github\.com/repos/\$Repository/releases') "Release público deve ser consultado sem GitHub CLI"
+    Assert-True ($achillesModuleSource -match '\$artifactAsset\.digest') "Checksum deve usar o digest oficial do asset no GitHub"
+    Assert-True ($achillesModuleSource -match 'Remove-Item.+SHA256SUMS') "Metadados de checksum de releases anteriores devem ser removidos"
     Assert-True ($achillesModuleSource -notmatch 'GitHub CLI é necessário para baixar') "Download público do Achilles não deve exigir autenticação"
     Assert-True ($achillesModuleSource -match 'não contém um build Achilles para Windows x64') "Release legado deve produzir erro acionável"
     Assert-True ($achillesModuleSource -match 'AchillesArtifactPath') "Erro de release deve indicar o fluxo com artefato local"
@@ -209,6 +212,9 @@ try {
     Assert-True ($composeSource -notmatch 'condition:\s+service_healthy|OMNIROUTE_URL|/api/skills') "Skills não devem depender da API do OmniRoute"
     Assert-True ($composeSource -match 'CAVEMAN_SKILLS_DIR') "Skills devem ser materializadas no diretório global do Caveman"
     Assert-True ($moduleSource -match 'Start-ValidatedSkillsSync[\s\S]+SKILLS_SYNC_ONCE=true') "Instalador deve validar a primeira sincronização no container"
+    Assert-True ($skillsSyncSource -notmatch 'mv "\$staging_skills/\$id"') "Publicação não deve mover arquivos Linux diretamente para o volume Windows"
+    Assert-True ($skillsSyncSource -match 'cp -R "\$staging_skills/\$id/\." "\$incoming/"') "Publicação deve copiar sem preservar ownership Unix"
+    Assert-True ($skillsSyncSource -match 'skill_tree_hash') "Mudanças em assets também devem atualizar a skill"
     Assert-True ($moduleSource -match 'autorização SSO do token') "Erro de repositório INTERNAL deve orientar sobre autorização organizacional"
     Assert-True ($moduleSource -match "managedCount.+-eq 0") "Instalação deve falhar quando nenhuma skill for publicada"
     Assert-True ($moduleSource -notmatch 'Remove-LegacyOmniSkills|/api/skills') "Setup não deve depender do executor de skills do OmniRoute"

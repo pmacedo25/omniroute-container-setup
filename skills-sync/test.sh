@@ -74,6 +74,13 @@ cmp "$test_root/source/.github/skills/pipfile-review/assets/example.txt" \
 test -f "$test_root/output/user-owned/SKILL.md"
 test ! -e "$test_root/output/pat-task-workflows-testing"
 
+# Asset-only changes must refresh the package even when SKILL.md is unchanged.
+printf '%s\n' 'updated asset' > \
+    "$test_root/source/.github/skills/pipfile-review/assets/example.txt"
+run_sync
+grep -q '^updated asset$' \
+    "$test_root/output/pat-pipfile-review/assets/example.txt"
+
 # A source failure must preserve the last valid catalog instead of publishing
 # an empty replacement.
 previous_hash="$(sha256sum "$catalog" | awk '{print $1}')"

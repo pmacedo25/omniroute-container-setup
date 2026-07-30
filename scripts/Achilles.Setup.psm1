@@ -135,6 +135,12 @@ function Get-AchillesRelease {
         [string]$Destination
     )
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    # Downloads persist between releases. Metadata from an older release must
+    # never be used to validate a newer artifact.
+    Remove-Item -LiteralPath (Join-Path $Destination "SHA256SUMS") `
+        -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $Destination "release-manifest.json") `
+        -Force -ErrorAction SilentlyContinue
     $headers = @{
         Accept = "application/vnd.github+json"
         "User-Agent" = "OmniRoute-Setup"
@@ -161,8 +167,14 @@ function Get-AchillesRelease {
         $matchingNames = @($artifactAssets | ForEach-Object { $_.name }) -join ", "
         throw "O release '$($release.tag_name)' contém builds Achilles duplicadas para Windows x64: $matchingNames."
     }
-    $assetsToDownload = @($artifactAssets[0])
-    $assetsToDownload += @($release.assets | Where-Object { $_.name -in @("release-manifest.json", "SHA256SUMS") })
+    $artifactAsset = $artifactAssets[0]
+    $apiDigest = [string]$artifactAsset.digest
+    $hasApiDigest = $apiDigest -match '^sha256:[a-fA-F0-9]{64}$'
+    $assetsToDownload = @($artifactAsset)
+    $assetsToDownload += @($release.assets | Where-Object {
+        $_.name -eq "release-manifest.json" -or
+        ($_.name -eq "SHA256SUMS" -and -not $hasApiDigest)
+    })
     foreach ($asset in $assetsToDownload) {
         $destinationPath = Join-Path $Destination $asset.name
         try {
@@ -175,6 +187,11 @@ function Get-AchillesRelease {
     $artifactPath = Join-Path $Destination $artifactName
     if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
         throw "O download terminou sem criar o artefato esperado '$artifactName'."
+    }
+    if ($hasApiDigest) {
+        $digestHash = $apiDigest.Substring("sha256:".Length).ToLowerInvariant()
+        Set-Content -LiteralPath (Join-Path $Destination "SHA256SUMS") `
+            -Value "$digestHash  $artifactName" -Encoding ascii
     }
     return $artifactPath
 }

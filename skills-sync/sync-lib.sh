@@ -115,6 +115,20 @@ derive_tags() {
         }'
 }
 
+skill_tree_hash() {
+    skill_dir="$1"
+    (
+        cd "$skill_dir"
+        find . -type f -print |
+            LC_ALL=C sort |
+            while IFS= read -r file; do
+                sha256sum "$file"
+            done |
+            sha256sum |
+            awk '{print $1}'
+    )
+}
+
 write_canonical_skill() {
     source_file="$1"
     relative_path="$2"
@@ -139,7 +153,7 @@ write_canonical_skill() {
         cat "$source_file"
     } > "$skill_dir/SKILL.md"
 
-    hash="$(sha256sum "$skill_dir/SKILL.md" | awk '{print $1}')"
+    hash="$(skill_tree_hash "$skill_dir")"
     jq -nc \
         --arg id "$id" \
         --arg name "$title" \
@@ -194,7 +208,7 @@ write_existing_skill() {
     # .github/skills/<name> package, not only its SKILL.md entrypoint.
     cp -R "$(dirname "$source_file")/." "$skill_dir/"
 
-    hash="$(sha256sum "$skill_dir/SKILL.md" | awk '{print $1}')"
+    hash="$(skill_tree_hash "$skill_dir")"
     jq -nc \
         --arg id "$id" \
         --arg name "$title" \
@@ -309,18 +323,27 @@ build_catalog() {
                 "$staging_root/catalog.json")"
             current_hash=""
             if [ -f "$published_root/$id/SKILL.md" ]; then
-                current_hash="$(sha256sum "$published_root/$id/SKILL.md" | awk '{print $1}')"
+                current_hash="$(skill_tree_hash "$published_root/$id")"
             fi
             if [ "$desired_hash" = "$current_hash" ]; then
                 rm -rf "$staging_skills/$id"
                 continue
             fi
 
+            incoming="$published_root/$id.incoming"
+            rm -rf "$incoming"
+            mkdir -p "$incoming"
+            if ! cp -R "$staging_skills/$id/." "$incoming/"; then
+                rm -rf "$incoming"
+                return 1
+            fi
             rm -rf "$published_root/$id.previous"
             if [ -d "$published_root/$id" ]; then
                 mv "$published_root/$id" "$published_root/$id.previous"
             fi
-            if ! mv "$staging_skills/$id" "$published_root/$id"; then
+            # Both paths are now inside the host bind mount. This rename does
+            # not attempt to preserve Unix ownership on Windows filesystems.
+            if ! mv "$incoming" "$published_root/$id"; then
                 [ ! -d "$published_root/$id.previous" ] ||
                     mv "$published_root/$id.previous" "$published_root/$id"
                 return 1
@@ -341,7 +364,8 @@ build_catalog() {
     fi
 
     mkdir -p "$state_dir"
-    mv "$staging_root/catalog.json" "$old_catalog"
+    cp "$staging_root/catalog.json" "$state_dir/catalog.json.new"
+    mv "$state_dir/catalog.json.new" "$old_catalog"
     rm -rf "$staging_root"
     log "Catálogo Caveman gerado com $(jq '.skills | length' "$old_catalog") skills."
 }
