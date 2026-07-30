@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $projectDirectory = Split-Path -Parent $PSScriptRoot
@@ -108,7 +108,7 @@ try {
     try {
         Test-AchillesArtifact -ArtifactPath $artifactPath -Sha256SumsPath $sumsPath | Out-Null
     } catch {
-        $checksumRejected = $_.Exception.Message -match "Checksum inválido"
+        $checksumRejected = $_.Exception.Message -match "^Checksum "
     }
     Assert-True $checksumRejected "Checksum adulterado deve ser rejeitado"
 
@@ -127,7 +127,8 @@ try {
     Assert-True ($bootstrapSource -match 'releases/latest') "Bootstrap deve instalar um release estável"
     Assert-True ($bootstrapSource -match '"\.omniroute"') "Bootstrap deve usar o estado persistente do OmniRoute"
     Assert-True ($bootstrapSource -match '\$installDirectory.+Join-Path \$stateDirectory "setup"') "Bootstrap deve persistir os arquivos para reexecução"
-    Assert-True ($bootstrapSource -match '\$_.Name -ne "\.env"') "Bootstrap deve preservar o ambiente existente"
+    Assert-True ($bootstrapSource -match '\$relativePath -ne "\.env"') "Bootstrap deve preservar o ambiente existente"
+    Assert-True ($bootstrapSource -match 'Get-ChildItem.+-File -Recurse') "Atualização deve sobrepor arquivos individualmente sem aninhar módulos antigos"
     Assert-True ($bootstrapSource -match 'ExecutionPolicy Bypass') "Bootstrap deve funcionar sem alterar a policy do usuário"
     Assert-True ($envExampleSource -match '(?m)^OMNIROUTE_SKILLS_REPO=\s*$') "Exemplo de ambiente não deve sugerir repositório de skills"
     Assert-True ($envExampleSource -match '(?m)^OMNIROUTE_SKILLS_PATH=\s*$') "Caminho de skills deve ser opcional e autodetectável"
@@ -163,7 +164,7 @@ try {
     Assert-True ($moduleSource -notmatch 'Method Delete.+api/providers') "Conexões do usuário nunca devem ser apagadas"
     Assert-True ($moduleSource -match 'Set-TokenEfficiencyDefaults') "Setup deve aplicar otimizações de tokens"
     Assert-True ($moduleSource -match 'Test-AchillesInstallation') "Setup deve validar o Achilles após instalar"
-    Assert-True ($moduleSource -match 'Install-Achilles') "Setup deve instalar Achilles nos dois modos"
+    Assert-True ($moduleSource -match 'Install-Achilles') "Setup deve instalar Achilles"
     Assert-True ($achillesModuleSource -match 'Microsoft\\Windows\\Start Menu\\Programs') "Achilles deve ser localizado pela pesquisa do Windows"
     Assert-True ($achillesModuleSource -match 'achilles\.cmd') "Setup deve criar o comando achilles"
     Assert-True ($achillesModuleSource -notmatch 'ProjectsDirectory') "Launcher não deve impor uma pasta padrão"
@@ -214,7 +215,10 @@ try {
     Assert-True ($composeSource -notmatch 'omniroute-skills') "Compose não deve recriar o volume omniroute-skills removido"
     Assert-True ($composeSource -match '3\.8\.49') "Container deve usar a release atual do OmniRoute"
     Assert-True ($moduleSource -match 'Set-EnvValue \$envPath "OMNIROUTE_VERSION" "3\.8\.49"') "Reexecução deve atualizar instalações preservadas para 3.8.49"
-    Assert-True ($moduleSource -notmatch 'omniroute@3\.8\.48') "Modo local não deve instalar a release antiga"
+    Assert-True ($setupSource -notmatch '\bMode\b|SkillsPath') "Setup público deve expor somente a instalação em container e autodetectar skills"
+    Assert-True ($moduleSource -notmatch 'Start-LocalMode|Ensure-LocalDependencies|Sync-SkillsRepository|ScheduledTask') "Implementação local deve ser removida"
+    Assert-True ($bootstrapSource -match 'Console\]::OutputEncoding = \$utf8') "Bootstrap deve forçar saída UTF-8"
+    Assert-True ($setupSource -match 'Console\]::OutputEncoding = \$utf8') "Setup deve forçar saída UTF-8"
     Assert-True ($moduleSource -match 'compose", "up"[\s\S]+"omniroute"') "Gateway deve iniciar antes do sincronizador que depende da AppKey"
     Assert-True ($composeSource -match '"\$\{PORT:-20128\}:\$\{PORT:-20128\}"') "OmniRoute deve ficar acessível no host"
     $tokens = $null

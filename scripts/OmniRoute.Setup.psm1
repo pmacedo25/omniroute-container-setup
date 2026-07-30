@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot "Achilles.Setup.psm1") -Force -DisableNameChecking
 
 function Add-KnownToolPaths {
@@ -121,20 +121,6 @@ function Ensure-ContainerEngine {
     return $engine
 }
 
-function Ensure-LocalDependencies {
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Install-WingetPackage -Id "Git.Git" -DisplayName "Git"
-    }
-    $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
-    $nodeMajor = if ($nodeCommand) { [int]((& node --version).TrimStart("v").Split(".")[0]) } else { 0 }
-    if ($nodeMajor -notin @(22, 24, 25, 26)) {
-        Install-WingetPackage -Id "OpenJS.NodeJS.LTS" -DisplayName "Node.js LTS"
-    }
-    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-        throw "npm não foi encontrado após a instalação do Node.js. Reabra o terminal e reexecute."
-    }
-}
-
 function Ensure-GitHubCliAuthentication {
     param([bool]$NonInteractive)
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
@@ -166,38 +152,6 @@ function Ensure-GitHubCliAuthentication {
     }
     Write-SetupMessage "GitHub CLI autenticado para os recursos privados necessários." "OK"
     return ([string]$token).Trim()
-}
-
-function Install-NativeBuildTools {
-    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-        Install-WingetPackage -Id "Python.Python.3.12" -DisplayName "Python 3.12"
-    }
-    if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
-        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-            throw "Microsoft C++ Build Tools é necessário, mas winget não está disponível."
-        }
-        Write-SetupMessage "Instalando Microsoft C++ Build Tools após falha de módulo nativo..."
-        Invoke-External "winget" @(
-            "install", "--exact", "--id", "Microsoft.VisualStudio.2022.BuildTools",
-            "--silent", "--accept-package-agreements", "--accept-source-agreements",
-            "--override", "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-        ) "Falha ao instalar Microsoft C++ Build Tools"
-    }
-}
-
-function Sync-SkillsRepository {
-    param([string]$Repository, [string]$Branch, [string]$Destination)
-    if (Test-Path -LiteralPath (Join-Path $Destination ".git")) {
-        Invoke-External "git" @("-C", $Destination, "remote", "set-url", "origin", $Repository) "Falha ao atualizar a origem das skills"
-        Invoke-External "git" @("-C", $Destination, "fetch", "--depth", "1", "origin", $Branch) "Falha ao baixar as skills"
-        Invoke-External "git" @("-C", $Destination, "reset", "--hard", "origin/$Branch") "Falha ao atualizar as skills"
-        return
-    }
-    if ((Test-Path -LiteralPath $Destination) -and @(Get-ChildItem -LiteralPath $Destination -Force).Count -gt 0) {
-        throw "O diretório de skills '$Destination' não é um repositório Git. Ele foi preservado; mova-o ou escolha outro destino."
-    }
-    New-Item -ItemType Directory -Path (Split-Path -Parent $Destination) -Force | Out-Null
-    Invoke-External "git" @("clone", "--depth", "1", "--branch", $Branch, $Repository, $Destination) "Falha ao clonar as skills"
 }
 
 function Resolve-SkillsRepositoryUrl {
@@ -841,37 +795,12 @@ function Restart-ContainerGateway {
     }
 }
 
-function Start-LocalMode {
-    param([string]$HomeDirectory, [int]$Port, [string]$EnvPath)
-    try {
-        Invoke-External "npm" @("install", "--global", "omniroute@3.8.49", "--no-audit", "--no-fund") "Falha ao instalar o OmniRoute"
-    } catch {
-        Write-SetupMessage "O pacote exigiu compilação nativa; instalando Python/C++ e tentando novamente." "WARN"
-        Install-NativeBuildTools
-        Invoke-External "npm" @("install", "--global", "omniroute@3.8.49", "--no-audit", "--no-fund") "Falha ao instalar o OmniRoute após preparar o toolchain"
-    }
-    $taskName = "OmniRoute Gateway"
-    $omnirouteCommand = (Get-Command omniroute -ErrorAction Stop).Source
-    if ([IO.Path]::GetExtension($omnirouteCommand) -in @(".cmd", ".bat")) {
-        $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument "/d /c `"$omnirouteCommand`" --port $Port --no-open"
-    } else {
-        $action = New-ScheduledTaskAction -Execute $omnirouteCommand -Argument "--port $Port --no-open"
-    }
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "OmniRoute em background" -Force | Out-Null
-    Start-ScheduledTask -TaskName $taskName
-}
-
 function Invoke-OmniRouteSetup {
     [CmdletBinding()]
     param(
-        [ValidateSet("container", "local")][string]$Mode,
         [string]$SetupDirectory,
         [string]$SkillsRepository,
         [string]$SkillsBranch,
-        [AllowEmptyString()][string]$SkillsPath,
         [int]$Port,
         [string]$AchillesRepository,
         [string]$AchillesVersion,
@@ -884,7 +813,7 @@ function Invoke-OmniRouteSetup {
     $SkillsRepository = Resolve-SkillsRepositoryUrl -Repository $SkillsRepository
     $homeDirectory = $env:USERPROFILE
     $stateDirectory = Join-Path $homeDirectory ".omniroute"
-    $envPath = if ($Mode -eq "container") { Join-Path $SetupDirectory ".env" } else { Join-Path $stateDirectory ".env" }
+    $envPath = Join-Path $SetupDirectory ".env"
     New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
     if (-not (Test-Path -LiteralPath $envPath)) { Copy-Item (Join-Path $SetupDirectory ".env.example") $envPath }
     Remove-EnvValue -Path $envPath -Names @(
@@ -901,45 +830,34 @@ function Invoke-OmniRouteSetup {
     Set-EnvValue $envPath "OMNIROUTE_VERSION" "3.8.49"
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_REPO" $SkillsRepository
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_BRANCH" $SkillsBranch
-    Set-EnvValue $envPath "OMNIROUTE_SKILLS_PATH" $SkillsPath
+    # Discovery is automatic (.github/skills, .agents, or AGENTS.md). Clear
+    # values left by v1.1.8, which exposed a path parameter prematurely.
+    Set-EnvValue $envPath "OMNIROUTE_SKILLS_PATH" ""
     $cavemanSkillsDirectory = Join-Path $homeDirectory ".cave\skills"
     New-Item -ItemType Directory -Path $cavemanSkillsDirectory -Force | Out-Null
     Set-EnvValue $envPath "CAVEMAN_SKILLS_DIR" $cavemanSkillsDirectory.Replace('\', '/')
-    if ($Mode -eq "container") {
-        $githubToken = Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive
-        if (![string]::IsNullOrWhiteSpace($githubToken)) {
-            Set-EnvValue $envPath "GITHUB_TOKEN" $githubToken
-        }
+    $githubToken = Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive
+    if (![string]::IsNullOrWhiteSpace($githubToken)) {
+        Set-EnvValue $envPath "GITHUB_TOKEN" $githubToken
     }
-    Write-SetupMessage "Preparando o modo $Mode. Reexecuções preservam banco, APPKEY e configurações."
-    if ($Mode -eq "container") {
-        New-Item -ItemType File -Path (Join-Path $stateDirectory "mode.container") -Force | Out-Null
-        $engine = Ensure-ContainerEngine
-        Invoke-CorporateCAInjection -SetupDirectory $SetupDirectory -CorporateCAPath $CorporateCAPath
-        Start-ContainerMode -Engine $engine -SetupDirectory $SetupDirectory
-    } else {
-        Remove-Item -LiteralPath (Join-Path $stateDirectory "mode.container") -Force -ErrorAction SilentlyContinue
-        Ensure-LocalDependencies
-        Sync-SkillsRepository -Repository $SkillsRepository -Branch $SkillsBranch -Destination (Join-Path $stateDirectory "skills")
-        Start-LocalMode -HomeDirectory $homeDirectory -Port $Port -EnvPath $envPath
-    }
+    Write-SetupMessage "Preparando o modo container. Reexecuções preservam banco, APPKEY e configurações."
+    $engine = Ensure-ContainerEngine
+    Invoke-CorporateCAInjection -SetupDirectory $SetupDirectory -CorporateCAPath $CorporateCAPath
+    Start-ContainerMode -Engine $engine -SetupDirectory $SetupDirectory
 
     $baseUrl = "http://localhost:$Port"
     Wait-HttpReady -Url "$baseUrl/api/monitoring/health"
-    $containerEngine = if ($Mode -eq "container") { $engine } else { "" }
     $appKey = Ensure-AppKey -BaseUrl $baseUrl -EnvPath $envPath `
-        -NonInteractive $NonInteractive -ContainerEngine $containerEngine
+        -NonInteractive $NonInteractive -ContainerEngine $engine
     $env:OMNIROUTE_API_KEY = $appKey
-    if ($Mode -eq "container") {
-        # The API-key metadata cache may not be invalidated when scopes
-        # are patched during onboarding. Restart before the first management call.
-        Restart-ContainerGateway -Engine $engine -SetupDirectory $SetupDirectory
-        Wait-HttpReady -Url "$baseUrl/api/monitoring/health"
-        # Validate GitHub access from the same container/network used in normal
-        # operation and require a non-empty first publication.
-        Start-ValidatedSkillsSync -Engine $engine -SetupDirectory $SetupDirectory `
-            -SkillsDirectory $cavemanSkillsDirectory
-    }
+    # The API-key metadata cache may not be invalidated when scopes
+    # are patched during onboarding. Restart before the first management call.
+    Restart-ContainerGateway -Engine $engine -SetupDirectory $SetupDirectory
+    Wait-HttpReady -Url "$baseUrl/api/monitoring/health"
+    # Validate GitHub access from the same container/network used in normal
+    # operation and require a non-empty first publication.
+    Start-ValidatedSkillsSync -Engine $engine -SetupDirectory $SetupDirectory `
+        -SkillsDirectory $cavemanSkillsDirectory
     Set-TokenEfficiencyDefaults -BaseUrl $baseUrl -AppKey $appKey
 
     if (-not $SkipProviderLogin -and -not $NonInteractive) {
@@ -967,4 +885,4 @@ function Invoke-OmniRouteSetup {
     Write-SetupMessage "OmniRoute disponível em $baseUrl; configuração concluída." "OK"
 }
 
-Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Sync-SkillsRepository, Resolve-SkillsRepositoryUrl, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup
+Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Resolve-SkillsRepositoryUrl, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup

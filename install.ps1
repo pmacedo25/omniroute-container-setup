@@ -1,5 +1,9 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$global:OutputEncoding = $utf8
 
 $repository = "pmacedo25/omniroute-container-setup"
 $releaseApi = "https://api.github.com/repos/$repository/releases/latest"
@@ -56,11 +60,15 @@ try {
     }
 
     New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
-    Get-ChildItem -LiteralPath $sourceDirectory -Force | ForEach-Object {
+    Get-ChildItem -LiteralPath $sourceDirectory -File -Recurse -Force | ForEach-Object {
+        $relativePath = $_.FullName.Substring($sourceDirectory.Length).TrimStart(
+            [char[]]@("\", "/")
+        )
         # O .env local contém a AppKey e sempre prevalece em atualizações.
-        if ($_.Name -ne ".env") {
-            Copy-Item -LiteralPath $_.FullName `
-                -Destination (Join-Path $installDirectory $_.Name) -Recurse -Force
+        if ($relativePath -ne ".env") {
+            $destination = Join-Path $installDirectory $relativePath
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
         }
     }
 

@@ -1,10 +1,7 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
-    [ValidateSet("container", "local")]
-    [string]$Mode,
     [string]$SkillsRepository = "nio-internet/agents-templates",
     [string]$SkillsBranch = "main",
-    [string]$SkillsPath,
     [int]$Port = 20128,
     [Alias("OpenRouterAIRepository")]
     [string]$AchillesRepository = "pmacedo25/Achilles-Releases",
@@ -21,26 +18,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$global:OutputEncoding = $utf8
 
 Import-Module (Join-Path $PSScriptRoot "scripts\OmniRoute.Setup.psm1") -Force -DisableNameChecking
 Import-Module (Join-Path $PSScriptRoot "scripts\Achilles.Setup.psm1") -Force -DisableNameChecking
 
-if ([string]::IsNullOrWhiteSpace($Mode)) {
-    if ($NonInteractive) {
-        $Mode = "container"
-    } else {
-        Write-Host "OmniRoute: selecione o modo [1=container, 2=local] (padrão: 1)"
-        $selection = Read-Host
-        $Mode = if ($selection -eq "2") { "local" } else { "container" }
-    }
-}
-
 $setupOptions = @{
-    Mode              = $Mode
     SetupDirectory    = $PSScriptRoot
     SkillsRepository  = $SkillsRepository
     SkillsBranch      = $SkillsBranch
-    SkillsPath        = $SkillsPath
     Port              = $Port
     AchillesRepository = $AchillesRepository
     AchillesVersion = $AchillesVersion

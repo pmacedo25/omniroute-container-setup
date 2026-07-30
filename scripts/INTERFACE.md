@@ -4,7 +4,7 @@
 
 Os módulos desta pasta provisionam OmniRoute, clientes locais e Achilles.
 Achilles é sempre um processo desktop no host, independentemente do gateway
-rodar localmente ou em contêiner.
+rodar em contêiner.
 
 ## Leitura rápida para agentes
 

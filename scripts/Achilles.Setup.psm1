@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $script:AchillesConfigSchemaVersion = 2
@@ -188,8 +188,10 @@ function Test-AchillesArtifact {
     if (-not [string]::IsNullOrWhiteSpace($Sha256SumsPath) -and
         (Test-Path -LiteralPath $Sha256SumsPath -PathType Leaf)) {
         $artifactName = Split-Path -Leaf $ArtifactPath
+        $checksumPattern = '^\s*([a-fA-F0-9]{{64}})\s+\*?{0}\s*$' -f `
+            [regex]::Escape($artifactName)
         $matchingLine = @(Get-Content -LiteralPath $Sha256SumsPath | Where-Object {
-            $_ -match "^\s*([a-fA-F0-9]{64})\s+\*?$([regex]::Escape($artifactName))\s*$"
+            $_ -match $checksumPattern
         })
         if ($matchingLine.Count -ne 1) {
             throw "SHA256SUMS não contém uma entrada única para '$artifactName'."

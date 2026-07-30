@@ -1,12 +1,9 @@
 # OmniRoute Setup para Windows
 
-Instalador idempotente do OmniRoute para dois cenários:
+Instalador idempotente do OmniRoute em contêiner, acessível no host em
+`http://localhost:20128`.
 
-- `container`: OmniRoute em contêiner, acessível no host em
-  `http://localhost:20128`.
-- `local`: OmniRoute como tarefa agendada em background.
-
-Nos dois modos, o setup também instala o **Achilles**, uma IDE desktop
+O setup também instala o **Achilles**, uma IDE desktop
 experimental baseada no Eclipse Theia. Ela trabalha diretamente na pasta local
 de projetos e consulta dinamicamente os combos e modelos do OmniRoute.
 
@@ -35,9 +32,8 @@ O `.env` existente é preservado nas atualizações. Portanto, o mesmo comando
 pode ser reexecutado depois de uma falha ou para buscar uma versão nova sem
 perder AppKey e configurações já criadas.
 
-Durante o fluxo serão solicitados o modo de execução (`container` ou `local`) e
-a URL obrigatória do repositório de skills. Os logins OAuth que exigem
-consentimento continuam sendo abertos pelo próprio instalador.
+Os logins OAuth que exigem consentimento continuam sendo abertos pelo próprio
+instalador.
 
 ## Execução a partir do código-fonte
 
@@ -50,38 +46,30 @@ Modo assistido:
 .\setup-interativo.ps1
 ```
 
-Nesse modo o instalador exige a URL do repositório GitHub de skills, sem
-preencher um repositório padrão. Nenhuma pasta de projetos é criada: o Achilles
-abre como uma IDE comum e trabalha com as pastas ou workspaces escolhidos em
-cada janela.
+O repositório corporativo `nio-internet/agents-templates` é usado por padrão,
+mas pode ser substituído por parâmetro. Nenhuma pasta de projetos é criada: o
+Achilles abre como uma IDE comum e trabalha com as pastas ou workspaces
+escolhidos em cada janela.
 
-Modo automático em contêiner:
+Modo automático:
 
 ```powershell
-.\setup-interativo.ps1 -Mode container -NonInteractive `
+.\setup-interativo.ps1 -NonInteractive `
   -SkillsRepository "nio-internet/agents-templates" `
   -SkipProviderLogin
-```
-
-Modo local:
-
-```powershell
-.\setup-interativo.ps1 -Mode local
 ```
 
 Parâmetros úteis:
 
 - `-SkillsRepository <owner/repo|URL>` (padrão:
   `nio-internet/agents-templates`) e `-SkillsBranch <nome>`
-- `-SkillsPath <caminho relativo>` quando as skills estiverem em uma pasta
-  específica; vazio autodetecta `.github/skills`, `.agents` ou `AGENTS.md`
 - `-Port 20128`
 - `-SkipAchilles` para instalar somente o gateway
 - `-AchillesVersion <semver|latest>`
 - `-AchillesArtifactPath <zip>` para validar um build local sem GitHub
 - `-CorporateCAPath <cadeia-netskope.pem>` quando a cadeia corporativa Netskope
   não puder ser descoberta no repositório de certificados do Windows
-- `-NonInteractive` para CI/provisionamento; exige `-SkillsRepository`
+- `-NonInteractive` para CI/provisionamento
 
 A autenticação OAuth dos provedores continua dependendo do consentimento no
 navegador. Todo o restante, incluindo APPKEY, bloqueio dos providers sem
@@ -95,7 +83,7 @@ administrativo não desativa a contabilização: inferências feitas pelo Achill
 continuam atribuídas ao ID dessa chave, incluindo requisições, tokens e custo.
 Assim o mesmo segredo atende setup e IDE sem uma segunda etapa manual.
 
-No modo container, o setup também instala o GitHub CLI quando necessário e
+O setup também instala o GitHub CLI quando necessário e
 verifica `gh auth status`, permitindo que o sincronizador acesse um repositório
 privado de skills. Em `-NonInteractive`, o instalador informa o comando de login
 e pode ser reexecutado depois sem perder o restante da configuração.
@@ -106,9 +94,9 @@ só então a atualização periódica é iniciada.
 
 ## Arquitetura
 
-No modo container:
+Na instalação:
 
-- `diegosouzapw/omniroute:3.8.48`: imagem oficial, sem toolchains de build.
+- `diegosouzapw/omniroute:3.8.49`: imagem oficial, sem toolchains de build.
 - `agent-skills-sync:1`: converte o repositório de governança em skills
   canônicas globais do Caveman e reconcilia a cada hora.
 - o volume nomeado preserva o banco do OmniRoute; as skills ficam no diretório
@@ -121,21 +109,10 @@ No modo container:
   permanecem desligados para não comprimir duas vezes.
 - a CA corporativa só é montada quando detectada ou fornecida explicitamente.
 
-No modo local:
-
-- instala Node LTS e Git via winget somente quando faltarem;
-- fixa OmniRoute `3.8.48`;
-- executa o gateway pela tarefa agendada `OmniRoute Gateway`.
-
-Python e Microsoft C++ Build Tools são instalados sob demanda se o npm precisar
-compilar um módulo nativo. Quando os binários pré-compilados funcionam, esse
-toolchain pesado não é instalado. Nenhuma ferramenta de build entra nas imagens
-de runtime.
-
 ## Achilles
 
-O Achilles é instalado nos modos container e local em escopo de usuário,
-sem UAC. O setup baixa o release público do repositório exclusivo de binários, valida o SHA-256 e
+O Achilles é instalado em escopo de usuário, sem UAC. O setup baixa o release
+público do repositório exclusivo de binários, valida o SHA-256 e
 extrai versões lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
 Também cria o comando estável `achilles` em `%USERPROFILE%\.omniroute\bin`,
 inclui esse diretório no PATH do usuário e registra atalhos na Área de Trabalho
