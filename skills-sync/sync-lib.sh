@@ -81,19 +81,21 @@ skill_description() {
         AGENTS.md)
             printf '%s' 'Governança global e roteador automático de contexto. Use para identificar o workflow, stack e arquitetura relevantes e carregar somente as instruções necessárias para a tarefa.'
             ;;
-        .agents/task-workflows/*)
-            printf 'Workflow especializado para %s. Carregue automaticamente quando a intenção da tarefa corresponder a este fluxo de trabalho.' "$title"
-            ;;
-        .agents/stacks/*)
-            printf 'Convenções especializadas de %s. Carregue automaticamente quando o projeto ou os arquivos da tarefa usarem esta stack.' "$title"
-            ;;
-        .agents/architecture/*)
-            printf 'Orientação arquitetural de %s. Carregue automaticamente quando decisões ou alterações de arquitetura forem relevantes.' "$title"
-            ;;
         *)
             summary="$(extract_summary "$source_file")"
             [ -n "$summary" ] && printf '%s' "$summary" ||
                 printf 'Instruções especializadas de %s. Carregue automaticamente quando a tarefa corresponder a este contexto.' "$title"
+            ;;
+    esac
+}
+
+disable_model_invocation() {
+    case "$1" in
+        AGENTS.md|.agents/documentation-templates/*|.agents/stack-guides/new-stack-guide-template.md)
+            printf '%s' 'true'
+            ;;
+        *)
+            printf '%s' 'false'
             ;;
     esac
 }
@@ -120,6 +122,7 @@ write_canonical_skill() {
     id="$4"
     title="$(extract_title "$source_file")"
     summary="$(skill_description "$source_file" "$relative_path" "$title")"
+    model_invocation_disabled="$(disable_model_invocation "$relative_path")"
     tags="$(derive_tags "$relative_path")"
     skill_dir="$output_root/$id"
     mkdir -p "$skill_dir"
@@ -128,6 +131,7 @@ write_canonical_skill() {
         printf '%s\n' '---'
         printf 'name: %s\n' "$(printf '%s' "$id" | jq -Rs .)"
         printf 'description: %s\n' "$(printf '%s' "$summary" | jq -Rs .)"
+        printf 'disable-model-invocation: %s\n' "$model_invocation_disabled"
         printf 'metadata:\n'
         printf '  source: %s\n' "$(printf '%s' "$relative_path" | jq -Rs .)"
         printf '  tags: %s\n' "$(printf '%s' "$tags" | jq -Rsc 'split(",") | map(select(length > 0))')"

@@ -32,6 +32,12 @@ test "$(jq -r '.skills | length' "$catalog")" = "2"
 test "$(jq -r '.skills[] | select(.id == "pat-task-workflows-testing") | .name' "$catalog")" = "Testes"
 grep -q '^name: "pat-task-workflows-testing"$' \
     "$test_root/output/pat-task-workflows-testing/SKILL.md"
+grep -q '^description: "Use este guia quando criar e revisar testes\."$' \
+    "$test_root/output/pat-task-workflows-testing/SKILL.md"
+grep -q '^disable-model-invocation: false$' \
+    "$test_root/output/pat-task-workflows-testing/SKILL.md"
+grep -q '^disable-model-invocation: true$' \
+    "$test_root/output/pat-project-governance/SKILL.md"
 grep -q '^  tags: \["task","workflows","testing"\]$' \
     "$test_root/output/pat-task-workflows-testing/SKILL.md"
 
