@@ -669,15 +669,9 @@ function Invoke-CorporateCAInjection {
     $certificateCount = 0
     $sourceDescription = ""
 
-    # Known SSL-inspection vendors — Root (trusted anchors) + CA (intermediates) stores
-    $inspectionPatterns = @(
-        "*Netskope*", "*goskope*",
-        "*Zscaler*",
-        "*Fortinet*", "*FortiGate*",
-        "*Palo Alto*",
-        "*Blue Coat*", "*BlueCoat*",
-        "*Symantec Web*"
-    )
+    # This setup is intentionally tied to the corporate Netskope chain.
+    # Do not collect unrelated enterprise or public CAs from the host.
+    $inspectionPatterns = @("*Netskope*", "*goskope*")
 
     if (-not [string]::IsNullOrWhiteSpace($CorporateCAPath)) {
         if (-not (Test-Path -LiteralPath $CorporateCAPath -PathType Leaf)) {
@@ -712,14 +706,16 @@ function Invoke-CorporateCAInjection {
             }
         }
         if ($certs.Count -gt 0) {
-            $pem = ($certs | Sort-Object Thumbprint | ForEach-Object {
+            # Preserve Windows store discovery order. Sorting by thumbprint breaks
+            # the original corporate chain order on machines with intermediates.
+            $pem = ($certs | ForEach-Object {
                 "-----BEGIN CERTIFICATE-----`n" +
                 [Convert]::ToBase64String($_.RawData, [Base64FormattingOptions]::InsertLineBreaks) +
                 "`n-----END CERTIFICATE-----"
             }) -join "`n"
             [System.IO.File]::WriteAllText($caDestination, $pem)
             $certificateCount = $certs.Count
-            $sourceDescription = "repositório de certificados do Windows"
+            $sourceDescription = "cadeia Netskope do repositório de certificados do Windows"
         }
     }
 
@@ -741,7 +737,7 @@ services:
         # Empty file keeps the Dockerfile COPY valid on environments without SSL inspection
         [System.IO.File]::WriteAllText($caDestination, "")
         if (Test-Path $overridePath) { Remove-Item $overridePath -Force }
-        Write-SetupMessage "Nenhum CA de inspeção SSL corporativo detectado; build padrão." "INFO"
+        Write-SetupMessage "Nenhuma cadeia Netskope/goskope detectada; build padrão." "INFO"
     }
 }
 

@@ -76,8 +76,8 @@ Parâmetros úteis:
 - `-SkipAchilles` para instalar somente o gateway
 - `-AchillesVersion <semver|latest>`
 - `-AchillesArtifactPath <zip>` para validar um build local sem GitHub
-- `-CorporateCAPath <arquivo.pem>` quando a CA de inspeção não puder ser
-  descoberta no repositório de certificados do Windows
+- `-CorporateCAPath <cadeia-netskope.pem>` quando a cadeia corporativa Netskope
+  não puder ser descoberta no repositório de certificados do Windows
 - `-NonInteractive` para CI/provisionamento; exige `-SkillsRepository`
 
 A autenticação OAuth dos provedores continua dependendo do consentimento no
