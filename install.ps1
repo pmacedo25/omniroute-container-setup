@@ -4,7 +4,7 @@ param(
     [string]$SkillsBranch,
     [int]$Port,
     [string]$AchillesRepository,
-    [string]$AchillesVersion,
+    [string]$AchillesVersion = "latest",
     [string]$AchillesArtifactPath,
     [switch]$NonInteractive,
     [switch]$SkipAchilles,

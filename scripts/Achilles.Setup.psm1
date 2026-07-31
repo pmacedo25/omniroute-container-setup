@@ -156,20 +156,30 @@ function Get-AchillesRelease {
         -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $Destination "release-manifest.json") `
         -Force -ErrorAction SilentlyContinue
+    Get-ChildItem -LiteralPath $Destination -Filter "Achilles-win-x64-*.zip" `
+        -File -ErrorAction SilentlyContinue | Remove-Item -Force
     $headers = @{
         Accept = "application/vnd.github+json"
         "User-Agent" = "OmniRoute-Setup"
+        "Cache-Control" = "no-cache"
+        Pragma = "no-cache"
     }
-    $releaseEndpoint = if ([string]::IsNullOrWhiteSpace($Version) -or $Version -eq "latest") {
-        "https://api.github.com/repos/$Repository/releases/latest"
+    $resolvedRequest = if ([string]::IsNullOrWhiteSpace($Version)) { "latest" } else { $Version.Trim() }
+    $releaseEndpoint = if ($resolvedRequest -eq "latest") {
+        $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        "https://api.github.com/repos/$Repository/releases/latest?cacheBust=$cacheBust"
     } else {
-        $tag = if ($Version.StartsWith("v")) { $Version } else { "v$Version" }
+        $tag = if ($resolvedRequest.StartsWith("v")) { $resolvedRequest } else { "v$resolvedRequest" }
         "https://api.github.com/repos/$Repository/releases/tags/$([uri]::EscapeDataString($tag))"
     }
     try {
         $release = Invoke-RestMethod -Uri $releaseEndpoint -Headers $headers -Method Get
     } catch {
-        throw "Não foi possível consultar o release público '$Version' de '$Repository': $($_.Exception.Message)"
+        throw "Não foi possível consultar o release público '$resolvedRequest' de '$Repository': $($_.Exception.Message)"
+    }
+    $releaseVersion = ([string]$release.tag_name).TrimStart("v")
+    if ($releaseVersion -notmatch '^\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?$') {
+        throw "O release retornado possui uma tag inválida: '$($release.tag_name)'."
     }
     $artifactAssets = @($release.assets | Where-Object {
         $_.name -match "^Achilles-win-x64-\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?\.zip$"
@@ -183,6 +193,11 @@ function Get-AchillesRelease {
         throw "O release '$($release.tag_name)' contém builds Achilles duplicadas para Windows x64: $matchingNames."
     }
     $artifactAsset = $artifactAssets[0]
+    if ($artifactAsset.name -notmatch '^Achilles-win-x64-(?<version>\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?)\.zip$' -or
+        $Matches.version -ne $releaseVersion) {
+        throw "O artefato '$($artifactAsset.name)' não corresponde ao release '$($release.tag_name)'."
+    }
+    Write-AchillesMessage "Release Achilles resolvido: $($release.tag_name) ($($artifactAsset.name))." "INFO"
     $apiDigest = [string]$artifactAsset.digest
     $hasApiDigest = $apiDigest -match '^sha256:[a-fA-F0-9]{64}$'
     $assetsToDownload = @($artifactAsset)
