@@ -464,6 +464,24 @@ function Set-ConfiguredCombos {
             Invoke-RestMethod -Uri "$BaseUrl/api/combos" -Method Post -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec 20 | Out-Null
         }
     }
+
+    $savedResponse = Invoke-RestMethod -Uri "$BaseUrl/api/combos" -Headers $headers -TimeoutSec 20
+    $savedByName = @{}
+    foreach ($item in @($savedResponse.combos)) { $savedByName[$item.name] = $item }
+    foreach ($combo in $configuration.combos) {
+        if (-not $savedByName.ContainsKey($combo.name)) {
+            throw "O OmniRoute não confirmou a criação ou atualização do combo '$($combo.name)'."
+        }
+        $saved = $savedByName[$combo.name]
+        if ([string]$saved.strategy -ne [string]$combo.strategy) {
+            throw "O OmniRoute não confirmou a estratégia '$($combo.strategy)' no combo '$($combo.name)'."
+        }
+        if ($combo.config.PSObject.Properties["failoverBeforeRetry"] -and
+            [bool]$saved.config.failoverBeforeRetry -ne [bool]$combo.config.failoverBeforeRetry) {
+            throw "O OmniRoute não confirmou a política de failover do combo '$($combo.name)'."
+        }
+    }
+    Write-SetupMessage "Combos configurados foram criados ou atualizados; combos adicionais do usuário foram preservados." "OK"
 }
 
 function Set-ConfiguredProvidersOnly {

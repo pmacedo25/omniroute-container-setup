@@ -39,6 +39,11 @@ O `.env` existente é preservado nas atualizações. Portanto, o mesmo comando
 pode ser reexecutado depois de uma falha ou para buscar uma versão nova sem
 perder AppKey e configurações já criadas.
 
+Na reexecução, os combos declarados são reconciliados pelo nome: os existentes
+são atualizados, os ausentes são criados e os demais combos do usuário são
+preservados. Para atualizar também o runtime e a afinidade de sessão do
+Achilles, use o comando completo sem `-SkipAchilles`.
+
 Os logins OAuth que exigem consentimento continuam sendo abertos pelo próprio
 instalador.
 
@@ -81,8 +86,8 @@ Parâmetros úteis:
 A autenticação OAuth dos provedores continua dependendo do consentimento no
 navegador. Todo o restante, incluindo APPKEY, bloqueio dos providers sem
 autenticação, persistência, sincronização das skills e configuração do Achilles,
-é automático. Combos nascem desativados e só são criados quando declarados em
-`combos-config.json`.
+é automático. Os três combos gerenciados são criados ou atualizados conforme
+`combos-config.json`; combos adicionais permanecem sob controle do usuário.
 
 O setup cria uma única AppKey `omniroute-setup`, com escopo `manage`, e a grava
 como `OMNIROUTE_API_KEY` no `.env` privado e no ambiente do usuário. O escopo

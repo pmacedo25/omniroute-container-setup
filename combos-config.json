@@ -11,7 +11,7 @@
     {
       "name": "combo-testing",
       "description": "Tarefas econômicas, testes e exploração rápida.",
-      "strategy": "priority",
+      "strategy": "lkgp",
       "models": [
         "github/gemini-3.1-pro-preview",
         "claude/claude-haiku-4-5-20251001",
@@ -20,13 +20,13 @@
       "config": {
         "compressionMode": "rtk",
         "trackMetrics": true,
-        "failoverBeforeRetry": true
+        "failoverBeforeRetry": false
       }
     },
     {
       "name": "combo-coding",
       "description": "Implementação e manutenção de código com equilíbrio entre custo e qualidade.",
-      "strategy": "priority",
+      "strategy": "lkgp",
       "models": [
         "github/gpt-5.3-codex",
         "claude/claude-sonnet-4-6",
@@ -35,13 +35,13 @@
       "config": {
         "compressionMode": "rtk",
         "trackMetrics": true,
-        "failoverBeforeRetry": true
+        "failoverBeforeRetry": false
       }
     },
     {
       "name": "combo-refining",
       "description": "Refinamento, revisão e decisões que exigem maior qualidade.",
-      "strategy": "priority",
+      "strategy": "lkgp",
       "models": [
         "claude/claude-sonnet-4-6",
         "claude/claude-sonnet-5",
@@ -50,7 +50,7 @@
       "config": {
         "compressionMode": "rtk",
         "trackMetrics": true,
-        "failoverBeforeRetry": true
+        "failoverBeforeRetry": false
       }
     }
   ]
