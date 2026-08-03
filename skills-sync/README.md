@@ -29,8 +29,9 @@ A descrição publicada é o primeiro parágrafo útil de cada documento. Escrev
 como um resumo semântico curto no formato `Use quando: ... Evite quando: ...`,
 com termos concretos — tecnologias, arquivos e intenções — que diferenciem essa
 skill das demais. Templates e a governança global são publicados com
-`disable-model-invocation: true`: continuam disponíveis no catálogo, mas não
-concorrem com skills executáveis no mapa inicial do modelo.
+`disable-model-invocation: true`: não concorrem com skills executáveis no mapa
+inicial. O Achilles trata `pat-project-governance` separadamente, carregando seu
+corpo como system prompt e recriando a sessão quando o hash mudar.
 
 Outro agente pode consumir o mesmo diretório usando este contrato:
 
@@ -62,6 +63,9 @@ imediatamente, reinicie o serviço:
 ```powershell
 docker compose restart skills-sync
 ```
+
+Na próxima mensagem, o Achilles recarrega o catálogo e aplica o novo
+`AGENTS.md`; não é necessário reiniciar ou reinstalar a IDE.
 
 O clone privado é um cache interno do sincronizador. Os workspaces de código
 continuam sem cópia do repositório de templates.
