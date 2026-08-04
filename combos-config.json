@@ -2,6 +2,7 @@
   "version": 2,
   "enabled": true,
   "deleteManagedWhenDisabled": true,
+  "allowGlobalFallbackChains": false,
   "managedNames": [
     "combo-coding",
     "combo-refining",
@@ -20,7 +21,13 @@
       "config": {
         "compressionMode": "rtk",
         "trackMetrics": true,
-        "failoverBeforeRetry": false
+        "failoverBeforeRetry": false,
+        "handoffModel": "",
+        "zeroLatencyOptimizationsEnabled": false,
+        "hedging": false,
+        "predictiveTtftMs": 0,
+        "fallbackCompressionMode": "off",
+        "explorationRate": 0
       }
     },
     {
@@ -35,7 +42,13 @@
       "config": {
         "compressionMode": "rtk",
         "trackMetrics": true,
-        "failoverBeforeRetry": false
+        "failoverBeforeRetry": false,
+        "handoffModel": "",
+        "zeroLatencyOptimizationsEnabled": false,
+        "hedging": false,
+        "predictiveTtftMs": 0,
+        "fallbackCompressionMode": "off",
+        "explorationRate": 0
       }
     },
     {
@@ -50,7 +63,13 @@
       "config": {
         "compressionMode": "rtk",
         "trackMetrics": true,
-        "failoverBeforeRetry": false
+        "failoverBeforeRetry": false,
+        "handoffModel": "",
+        "zeroLatencyOptimizationsEnabled": false,
+        "hedging": false,
+        "predictiveTtftMs": 0,
+        "fallbackCompressionMode": "off",
+        "explorationRate": 0
       }
     }
   ]

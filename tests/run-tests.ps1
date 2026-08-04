@@ -48,12 +48,26 @@ try {
     Assert-True (@($combos.combos | ForEach-Object strategy | Select-Object -Unique) -notcontains "auto") "Combos não devem usar estratégia auto"
     Assert-True (@($combos.combos | Where-Object { $_.strategy -ne "lkgp" }).Count -eq 0) "Combos de chat devem manter afinidade com o último destino saudável"
     Assert-True (@($combos.combos | Where-Object { $_.config.failoverBeforeRetry }).Count -eq 0) "Combos devem tentar preservar o destino atual antes do failover"
+    Assert-Equal $false $combos.allowGlobalFallbackChains "Fallback chains globais devem ficar desativadas"
+    Assert-True (@($combos.combos | Where-Object { $_.config.handoffModel -ne "" }).Count -eq 0) "Combos não podem fazer handoff para modelo externo"
+    Assert-True (@($combos.combos | Where-Object { $_.config.zeroLatencyOptimizationsEnabled -or $_.config.hedging -or $_.config.explorationRate -ne 0 }).Count -eq 0) "Combos não podem fazer roteamento especulativo"
     Assert-True (@($combos.combos | ForEach-Object { $_.config.compressionMode } | Select-Object -Unique) -notcontains "stacked") "Combos OmniRoute não devem habilitar Caveman"
     $configuredModels = @($combos.combos | ForEach-Object models)
     Assert-True (@($configuredModels | Where-Object { $_ -like "claude/*" }).Count -gt 0) "Combos devem manter modelos da conta Claude"
     Assert-True (@($configuredModels | Where-Object { $_ -like "github/*" }).Count -gt 0) "Combos devem manter modelos da conta GitHub Copilot"
     Assert-True (@($configuredModels | Where-Object { $_ -like "antigravity/*" -or $_ -like "cx/*" }).Count -eq 0) "Combos não devem depender de providers fora de Claude e GitHub Copilot"
     Assert-True (@($combos.managedNames) -contains "combo-coding") "Manifesto deve reconhecer e limpar combos legados"
+    $normalizedModels = @(
+        [pscustomobject]@{ kind = "model"; providerId = "github"; model = "github/gpt-5.3-codex" },
+        [pscustomobject]@{ kind = "model"; providerId = "claude"; model = "claude-sonnet-4-6" }
+    )
+    Assert-True (Test-ComboModelSequence `
+        -Expected @("github/gpt-5.3-codex", "claude/claude-sonnet-4-6") `
+        -Actual $normalizedModels) "Validação deve aceitar a normalização oficial dos modelos"
+    Assert-True (-not (Test-ComboModelSequence `
+        -Expected @("github/gpt-5.3-codex", "claude/claude-sonnet-4-6") `
+        -Actual @($normalizedModels[0], [pscustomobject]@{ model = "claude/claude-sonnet-5" }))) `
+        "Validação deve rejeitar modelo caro inserido fora do combo"
     Assert-True (Test-Path (Join-Path $projectDirectory "benchmarks\README.md")) "Matriz de benchmark deve estar versionada"
 
     Assert-Equal "C:\Tools" (Get-PathWithEntry -CurrentPath $null -Entry "C:\Tools") "PATH nulo deve ser suportado"
@@ -189,7 +203,8 @@ try {
     Assert-True ($moduleSource -match 'Set-TokenEfficiencyDefaults') "Setup deve aplicar otimizações de tokens"
     Assert-True ($moduleSource -match 'existingByName\.ContainsKey\(\$combo\.name\)[\s\S]+-Method Put') "Reexecução deve atualizar combos gerenciados já existentes"
     Assert-True ($moduleSource -match 'api/combos" -Method Post') "Instalação nova deve criar combos gerenciados ausentes"
-    Assert-True ($moduleSource -match 'Combos configurados foram criados ou atualizados; combos adicionais do usuário foram preservados') "Convergência deve preservar combos não gerenciados"
+    Assert-True ($moduleSource -match 'lista estrita de modelos') "Convergência deve confirmar o contrato estrito dos combos gerenciados"
+    Assert-True ($moduleSource -match 'combos do usuário foram preservados') "Convergência deve preservar combos não gerenciados quando o modo declarativo for desativado"
     Assert-True ($moduleSource -match 'não confirmou a estratégia') "Convergência deve validar a estratégia persistida pelo OmniRoute"
     Assert-True ($moduleSource -match 'Test-AchillesInstallation') "Setup deve validar o Achilles após instalar"
     Assert-True ($moduleSource -match 'Install-Achilles') "Setup deve instalar Achilles"

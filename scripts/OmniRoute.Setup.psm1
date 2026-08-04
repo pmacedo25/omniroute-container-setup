@@ -437,6 +437,23 @@ function Set-ConfiguredCombos {
     $existingByName = @{}
     foreach ($item in @($existingResponse.combos)) { $existingByName[$item.name] = $item }
 
+    if ($configuration.PSObject.Properties["allowGlobalFallbackChains"] -and
+        -not [bool]$configuration.allowGlobalFallbackChains) {
+        $fallbackResponse = Invoke-RestMethod -Uri "$BaseUrl/api/fallback/chains" -Headers $headers -TimeoutSec 20
+        $fallbackChains = if ($fallbackResponse.PSObject.Properties["chains"]) {
+            $fallbackResponse.chains
+        } else {
+            $fallbackResponse
+        }
+        if ($fallbackChains -and $fallbackChains.PSObject) {
+            foreach ($property in @($fallbackChains.PSObject.Properties)) {
+                $deleteBody = @{ model = [string]$property.Name } | ConvertTo-Json -Compress
+                Invoke-RestMethod -Uri "$BaseUrl/api/fallback/chains" -Method Delete `
+                    -Headers $headers -ContentType "application/json" -Body $deleteBody -TimeoutSec 20 | Out-Null
+            }
+        }
+    }
+
     if ($configuration.PSObject.Properties["enabled"] -and -not $configuration.enabled) {
         if ($configuration.deleteManagedWhenDisabled) {
             foreach ($name in @($configuration.managedNames)) {
@@ -468,6 +485,25 @@ function Set-ConfiguredCombos {
     $savedResponse = Invoke-RestMethod -Uri "$BaseUrl/api/combos" -Headers $headers -TimeoutSec 20
     $savedByName = @{}
     foreach ($item in @($savedResponse.combos)) { $savedByName[$item.name] = $item }
+
+    # OmniRoute normalizes strings into structured model steps. Compare the
+    # effective ordered identifiers, not the JSON representation. If an older
+    # persisted combo survives a PUT with stale targets, replace only that
+    # installer-managed combo and verify it again below.
+    foreach ($combo in $configuration.combos) {
+        if ($savedByName.ContainsKey($combo.name) -and
+            -not (Test-ComboModelSequence -Expected @($combo.models) -Actual @($savedByName[$combo.name].models))) {
+            Invoke-RestMethod -Uri "$BaseUrl/api/combos/$($savedByName[$combo.name].id)" `
+                -Method Delete -Headers $headers -TimeoutSec 20 | Out-Null
+            $body = $combo | ConvertTo-Json -Depth 20
+            Invoke-RestMethod -Uri "$BaseUrl/api/combos" -Method Post -Headers $headers `
+                -ContentType "application/json" -Body $body -TimeoutSec 20 | Out-Null
+        }
+    }
+
+    $savedResponse = Invoke-RestMethod -Uri "$BaseUrl/api/combos" -Headers $headers -TimeoutSec 20
+    $savedByName = @{}
+    foreach ($item in @($savedResponse.combos)) { $savedByName[$item.name] = $item }
     foreach ($combo in $configuration.combos) {
         if (-not $savedByName.ContainsKey($combo.name)) {
             throw "O OmniRoute não confirmou a criação ou atualização do combo '$($combo.name)'."
@@ -476,12 +512,58 @@ function Set-ConfiguredCombos {
         if ([string]$saved.strategy -ne [string]$combo.strategy) {
             throw "O OmniRoute não confirmou a estratégia '$($combo.strategy)' no combo '$($combo.name)'."
         }
+        if (-not (Test-ComboModelSequence -Expected @($combo.models) -Actual @($saved.models))) {
+            $expectedModels = (Get-ComboModelIdentifiers @($combo.models)) -join ", "
+            $actualModels = (Get-ComboModelIdentifiers @($saved.models)) -join ", "
+            throw "O combo '$($combo.name)' manteve modelos fora do manifesto. Esperado: [$expectedModels]. Salvo: [$actualModels]."
+        }
         if ($combo.config.PSObject.Properties["failoverBeforeRetry"] -and
             [bool]$saved.config.failoverBeforeRetry -ne [bool]$combo.config.failoverBeforeRetry) {
             throw "O OmniRoute não confirmou a política de failover do combo '$($combo.name)'."
         }
+        if ([string]$saved.config.handoffModel -ne "" -or
+            [bool]$saved.config.zeroLatencyOptimizationsEnabled -or
+            [bool]$saved.config.hedging -or
+            [double]$saved.config.explorationRate -ne 0) {
+            throw "O combo '$($combo.name)' manteve roteamento externo ou especulativo habilitado."
+        }
     }
-    Write-SetupMessage "Combos configurados foram criados ou atualizados; combos adicionais do usuário foram preservados." "OK"
+    Write-SetupMessage "Combos reconciliados com lista estrita de modelos; fallback global e handoff externo estão desativados." "OK"
+}
+
+function Get-ComboModelIdentifiers {
+    param([Parameter(ValueFromPipeline = $true)]$Models)
+    process {
+        foreach ($entry in @($Models)) {
+            if ($entry -is [string]) {
+                ([string]$entry).Trim()
+                continue
+            }
+            if ($null -eq $entry -or ($entry.PSObject.Properties["kind"] -and [string]$entry.kind -eq "combo-ref")) {
+                continue
+            }
+            $model = if ($entry.PSObject.Properties["model"]) { ([string]$entry.model).Trim() } else { "" }
+            if ([string]::IsNullOrWhiteSpace($model)) { continue }
+            if ($model.Contains("/")) {
+                $model
+                continue
+            }
+            $provider = if ($entry.PSObject.Properties["providerId"]) { ([string]$entry.providerId).Trim() } `
+                elseif ($entry.PSObject.Properties["provider"]) { ([string]$entry.provider).Trim() } else { "" }
+            if ([string]::IsNullOrWhiteSpace($provider)) { $model } else { "$provider/$model" }
+        }
+    }
+}
+
+function Test-ComboModelSequence {
+    param([object[]]$Expected, [object[]]$Actual)
+    $expectedIds = @(Get-ComboModelIdentifiers $Expected)
+    $actualIds = @(Get-ComboModelIdentifiers $Actual)
+    if ($expectedIds.Count -ne $actualIds.Count) { return $false }
+    for ($index = 0; $index -lt $expectedIds.Count; $index++) {
+        if ([string]$expectedIds[$index] -cne [string]$actualIds[$index]) { return $false }
+    }
+    return $true
 }
 
 function Set-ConfiguredProvidersOnly {
@@ -903,4 +985,4 @@ function Invoke-OmniRouteSetup {
     Write-SetupMessage "OmniRoute disponível em $baseUrl; configuração concluída." "OK"
 }
 
-Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Resolve-SkillsRepositoryUrl, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup
+Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Resolve-SkillsRepositoryUrl, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-ComboModelIdentifiers, Test-ComboModelSequence, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup

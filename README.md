@@ -44,6 +44,12 @@ são atualizados, os ausentes são criados e os demais combos do usuário são
 preservados. Para atualizar também o runtime e a afinidade de sessão do
 Achilles, use o comando completo sem `-SkipAchilles`.
 
+Os combos gerenciados usam somente a lista ordenada de modelos declarada em
+`combos-config.json`. O setup desativa handoff, hedging, exploração e fallback
+chains globais, valida o estado retornado pelo OmniRoute e recria apenas um
+combo gerenciado que ainda contenha destinos antigos. Uma falha de todos os
+modelos do combo retorna erro; ela nunca autoriza selecionar um modelo externo.
+
 Os logins OAuth que exigem consentimento continuam sendo abertos pelo próprio
 instalador.
 
