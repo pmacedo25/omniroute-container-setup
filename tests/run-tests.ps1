@@ -198,6 +198,8 @@ try {
     Assert-True ($moduleSource -match 'volumes persistentes serão preservados') "Correção deve informar que os volumes são preservados"
     Assert-True ($moduleSource -match 'Set-ConfiguredProvidersOnly') "Setup deve convergir providers configurados"
     Assert-True ($moduleSource -match 'blockedProviders') "Providers no-auth devem ser bloqueados pela configuração oficial"
+    Assert-True ($moduleSource -match '\$noAuthProviderIds\s*=\s*@\(\s*"auto"') "Auto Zero Config deve ser bloqueado por padrão"
+    Assert-True ($moduleSource -match 'catálogo ainda anuncia rotas auto/\*') "Setup deve validar que Auto Zero Config saiu do catálogo"
     Assert-True ($moduleSource -match 'PSObject\.Properties\["blockedProviders"\]') "Ausência inicial de blockedProviders deve ser tratada sem enviar null"
     Assert-True ($moduleSource -notmatch 'Method Delete.+api/providers') "Conexões do usuário nunca devem ser apagadas"
     Assert-True ($moduleSource -match 'Set-TokenEfficiencyDefaults') "Setup deve aplicar otimizações de tokens"

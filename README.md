@@ -49,6 +49,9 @@ Os combos gerenciados usam somente a lista ordenada de modelos declarada em
 chains globais, valida o estado retornado pelo OmniRoute e recria apenas um
 combo gerenciado que ainda contenha destinos antigos. Uma falha de todos os
 modelos do combo retorna erro; ela nunca autoriza selecionar um modelo externo.
+O provider de sistema **Auto (Zero Config)** também é incluído em
+`Settings → Security → Blocked Providers` e precisa desaparecer de `/v1/models`
+antes de a instalação ser considerada concluída.
 
 Os logins OAuth que exigem consentimento continuam sendo abertos pelo próprio
 instalador.

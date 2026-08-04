@@ -570,6 +570,7 @@ function Set-ConfiguredProvidersOnly {
     param([string]$BaseUrl, [string]$AppKey)
     $headers = @{ Authorization = "Bearer $AppKey" }
     $noAuthProviderIds = @(
+        "auto",
         "opencode", "duckduckgo-web", "felo-web", "theoldllm", "chipotle",
         "veoaifree-web", "mimocode", "auggie", "aihorde"
     )
@@ -612,7 +613,16 @@ function Set-ConfiguredProvidersOnly {
     if ($missing.Count -gt 0) {
         throw "O OmniRoute não confirmou o bloqueio dos providers padrão: $($missing -join ', ')."
     }
-    Write-SetupMessage "Providers sem autenticação foram bloqueados; $($userProviderIds.Count) conexão(ões) do usuário preservada(s)." "OK"
+    $catalog = Invoke-RestMethod -Uri "$BaseUrl/v1/models" -Headers $headers `
+        -TimeoutSec 20 -ErrorAction Stop
+    $autoModels = @($catalog.data | Where-Object {
+        $modelId = ([string]$_.id).Trim().ToLowerInvariant()
+        $modelId -eq "auto" -or $modelId.StartsWith("auto/")
+    })
+    if ($autoModels.Count -gt 0) {
+        throw "O provider Auto (Zero Config) foi bloqueado, mas o catálogo ainda anuncia rotas auto/*."
+    }
+    Write-SetupMessage "Auto (Zero Config) e providers sem autenticação foram bloqueados; $($userProviderIds.Count) conexão(ões) do usuário preservada(s)." "OK"
 }
 
 function Set-TokenEfficiencyDefaults {
