@@ -198,6 +198,8 @@ try {
     Assert-True ($achillesModuleSource -notmatch 'ProjectsDirectory') "Launcher não deve impor uma pasta padrão"
     Assert-True ($achillesModuleSource -match 'IsNullOrWhiteSpace\(`\$_\)') "Launcher deve ignorar argumentos vazios do PowerShell 5"
     Assert-True ($achillesModuleSource -match 'launcher-error\.log') "Falhas ocultas do launcher devem deixar diagnóstico"
+    Assert-True ($achillesModuleSource -match 'NODE_EXTRA_CA_CERTS') "Launcher deve propagar a cadeia Netskope para o Node do Achilles"
+    Assert-True ($achillesModuleSource -match 'netskope-ca\.pem') "Achilles deve reutilizar somente a cadeia corporativa detectada pelo setup"
     Assert-True ($achillesModuleSource -match 'System32\\wscript\.exe') "Atalhos devem abrir sem janela de terminal"
     Assert-True ($achillesModuleSource -match 'GraphicalLauncher') "Instalação deve validar o launcher gráfico"
     Assert-True ($setupSource -match 'AchillesArtifactPath') "Setup deve aceitar artefato local para validação"

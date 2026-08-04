@@ -294,6 +294,14 @@ if ([string]::IsNullOrWhiteSpace(`$currentApiKey)) {
 }
 `$env:OMNIROUTE_API_KEY = `$currentApiKey
 `$env:OPENAI_API_KEY = `$currentApiKey
+`$corporateCAPath = Join-Path (Split-Path -Parent `$stateDirectory) ".omniroute\setup\skills-sync\netskope-ca.pem"
+if ((Test-Path -LiteralPath `$corporateCAPath -PathType Leaf) -and
+    (Get-Item -LiteralPath `$corporateCAPath).Length -gt 0) {
+    # NODE_EXTRA_CA_CERTS is read only when Node starts, so it must be present
+    # before Electron launches. Keep the Windows trust-store fallback in the IDE
+    # as a second layer for machines whose corporate chain changes later.
+    `$env:NODE_EXTRA_CA_CERTS = `$corporateCAPath
+}
 `$arguments = @(`$WorkspaceArguments | Where-Object {
     -not [string]::IsNullOrWhiteSpace(`$_)
 })
