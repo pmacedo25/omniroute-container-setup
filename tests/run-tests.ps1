@@ -285,6 +285,8 @@ try {
     Assert-True ($skillsSyncSource -match 'cp -R "\$staging_skills/\$id/\." "\$incoming/"') "Publicação deve copiar sem preservar ownership Unix"
     Assert-True ($skillsSyncSource -match 'skill_tree_hash') "Mudanças em assets também devem atualizar a skill"
     Assert-True ($moduleSource -match 'autorização SSO do token') "Erro de repositório INTERNAL deve orientar sobre autorização organizacional"
+    Assert-True ($moduleSource -match "source: '\$\{yamlAbsPath\}'") "Mount do CA deve citar o caminho Windows"
+    Assert-True ($moduleSource -match 'type: bind[\s\S]+target: /certs/corporate-ca\.pem[\s\S]+read_only: true') "Mount do CA deve usar sintaxe longa compatível com Docker e Podman"
     Assert-True ($moduleSource -match "managedCount.+-eq 0") "Instalação deve falhar quando nenhuma skill for publicada"
     Assert-True ($moduleSource -notmatch 'Remove-LegacyOmniSkills|/api/skills') "Setup não deve depender do executor de skills do OmniRoute"
     Assert-True ($composeSource -notmatch 'omniroute-skills') "Compose não deve recriar o volume omniroute-skills removido"

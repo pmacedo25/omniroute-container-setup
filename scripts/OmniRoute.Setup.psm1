@@ -795,16 +795,21 @@ function Invoke-CorporateCAInjection {
     }
 
     if ($certificateCount -gt 0) {
-        # docker-compose resolves relative bind-mount paths inconsistently on Windows/Podman.
-        # Write an override with the absolute path so the CA reaches the Node.js runtime.
+        # Short volume syntax is ambiguous with Windows drive letters and is parsed
+        # differently by Docker Compose and podman-compose. Use the long form and
+        # quote the absolute source so paths with spaces remain a single value.
         $absPath = (Resolve-Path $caDestination).Path.Replace('\', '/')
+        $yamlAbsPath = $absPath.Replace("'", "''")
         $overrideContent = @"
 services:
   omniroute:
     environment:
       NODE_EXTRA_CA_CERTS: /certs/corporate-ca.pem
     volumes:
-      - ${absPath}:/certs/corporate-ca.pem:ro
+      - type: bind
+        source: '${yamlAbsPath}'
+        target: /certs/corporate-ca.pem
+        read_only: true
 "@
         [System.IO.File]::WriteAllText($overridePath, $overrideContent)
         Write-SetupMessage "CA corporativo carregado de $sourceDescription ($certificateCount certificado(s)); injetado somente no container." "OK"
