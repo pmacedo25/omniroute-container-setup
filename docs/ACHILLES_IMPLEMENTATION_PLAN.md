@@ -11,7 +11,7 @@ O Achilles:
 
 - roda como aplicativo Electron no Windows, sem contêiner;
 - abre sem pasta fixa e permite selecionar pastas ou workspaces;
-- usa Git, `gh`, Node, Python, C++ e demais ferramentas instaladas no host;
+- usa Git, Node, Python, C++ e demais ferramentas instaladas no host;
 - fala apenas com o OmniRoute local pela API OpenAI-compatible;
 - exibe somente `combo-testing`, `combo-coding` e `combo-refining`;
 - permite selecionar combo e esforço de raciocínio no chat;
@@ -220,7 +220,7 @@ Entregas:
 
 - abrir sem workspace obrigatório no primeiro uso;
 - respeitar as pastas abertas em cada janela;
-- validar Git, `gh`, Node, Python e compiladores;
+- validar Git, Node, Python e compiladores;
 - reutilizar PATH e ambiente do usuário;
 - comandos de diagnóstico não destrutivos;
 - Workspace Trust habilitado por confirmação, não ignorado.
@@ -228,7 +228,7 @@ Entregas:
 Aceite:
 
 - arquivos criados aparecem diretamente no Windows;
-- `gh auth status`, `node --version` e `python --version` rodam no terminal;
+- `git --version`, `node --version` e `python --version` rodam no terminal;
 - não existe caminho `/workspace` ou `/projects` de contêiner;
 - IDE funciona mesmo sem uma ferramenta opcional.
 
@@ -259,7 +259,7 @@ Caminho exclusivo: repositório `omniroute-container-setup`.
 Entregas:
 
 - `Install-Achilles`, `Update-Achilles` e `Test-Achilles`;
-- baixar release privada via `gh release download` ou URL autenticada;
+- baixar release pública pela API HTTPS do GitHub, sem GitHub CLI;
 - aceitar `-AchillesArtifactPath` para testes locais sem GitHub;
 - validar SHA-256 antes de extrair;
 - instalar em `%LOCALAPPDATA%` sem UAC;
@@ -372,8 +372,8 @@ Todo resultado do CLI precisa virar diff revisável e passar pelos mesmos testes
 - Só atualizar Theia se houver bug bloqueante ou vulnerabilidade relevante.
 - Encerrar o experimento com decisão explícita: arquivar, continuar ou substituir.
 
-O repositório privado exige `gh auth status` válido para baixar releases; tokens
-jamais serão embutidos. Sem assinatura de código, Windows SmartScreen pode
+Repositórios privados de skills usam `GITHUB_TOKEN` com leitura e autorização
+SSO quando necessária; tokens jamais serão embutidos. Sem assinatura de código, Windows SmartScreen pode
 alertar no protótipo. O ZIP reduz a cerimônia, mas não cria reputação para o
 executável. Atualizações são lado a lado porque arquivos do Electron podem estar
 bloqueados enquanto a IDE estiver aberta.

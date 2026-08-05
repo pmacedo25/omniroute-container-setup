@@ -6,6 +6,8 @@ Import-Module (Join-Path $projectDirectory "scripts\OmniRoute.Setup.psm1") -Forc
 Import-Module (Join-Path $projectDirectory "scripts\Achilles.Setup.psm1") -Force -DisableNameChecking
 $testRoot = Join-Path $projectDirectory ".test-home"
 $originalUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+$originalGitHubToken = [Environment]::GetEnvironmentVariable("GITHUB_TOKEN", "Process")
+$originalGhToken = [Environment]::GetEnvironmentVariable("GH_TOKEN", "Process")
 
 function Assert-True {
     param([bool]$Condition, [string]$Message)
@@ -79,6 +81,21 @@ try {
     Assert-Equal "https://git.example.com/team/skills.git" `
         (Resolve-SkillsRepositoryUrl "https://git.example.com/team/skills.git") `
         "URL Git completa deve ser preservada"
+
+    [Environment]::SetEnvironmentVariable("GITHUB_TOKEN", $null, "Process")
+    [Environment]::SetEnvironmentVariable("GH_TOKEN", $null, "Process")
+    Set-Content -LiteralPath $envPath -Value "PORT=20128" -Encoding utf8
+    Assert-True ($null -eq (Resolve-SkillsGitHubToken -EnvPath $envPath -NonInteractive $true)) `
+        "Repositório público não deve exigir token"
+    [Environment]::SetEnvironmentVariable("GITHUB_TOKEN", "environment-test-token", "Process")
+    Assert-Equal "environment-test-token" `
+        (Resolve-SkillsGitHubToken -EnvPath $envPath -NonInteractive $true) `
+        "GITHUB_TOKEN do processo deve ser reutilizado"
+    [Environment]::SetEnvironmentVariable("GITHUB_TOKEN", $null, "Process")
+    Set-EnvValue $envPath "GITHUB_TOKEN" "persisted-test-token"
+    Assert-Equal "persisted-test-token" `
+        (Resolve-SkillsGitHubToken -EnvPath $envPath -NonInteractive $true) `
+        "Token persistido deve sobreviver à atualização do instalador"
 
     $testLauncher = Join-Path $testRoot ".achilles\Achilles.ps1"
     New-Item -ItemType Directory -Path (Split-Path -Parent $testLauncher) -Force | Out-Null
@@ -188,10 +205,11 @@ try {
     Assert-Equal 0 @(Get-ChildItem (Join-Path $projectDirectory "openhands") -File -ErrorAction SilentlyContinue).Count "Imagem customizada legada deve ser removida"
     Assert-True ($moduleSource -match 'Remove-DuplicateSetupAppKeys') "Setup deve consolidar suas AppKeys duplicadas"
     Assert-True ($moduleSource -match 'PSObject\.Properties\[\$propertyName\]') "Leitura de AppKeys deve tolerar campos opcionais"
-    Assert-True ($moduleSource -match 'GitHub\.cli') "Setup deve instalar o GitHub CLI quando necessário"
-    Assert-True ($moduleSource -match 'gh auth login') "Setup deve orientar o login do GitHub CLI em modo não interativo"
-    Assert-True ($moduleSource -match '"auth", "login"') "Setup interativo deve iniciar o login do GitHub CLI"
-    Assert-True ($moduleSource -match '"--git-protocol", "https", "--web"') "Login do GitHub CLI deve usar navegador e HTTPS"
+    Assert-True ($moduleSource -notmatch 'GitHub\.cli|gh auth') "Setup não deve depender do GitHub CLI"
+    Assert-True ($moduleSource -match 'Resolve-SkillsGitHubToken') "Setup deve resolver token sem GitHub CLI"
+    Assert-True ($moduleSource -match '\$env:GITHUB_TOKEN') "Setup deve aceitar GITHUB_TOKEN"
+    Assert-True ($moduleSource -match '\$env:GH_TOKEN') "Setup deve aceitar GH_TOKEN"
+    Assert-True ($moduleSource -match 'Read-Host "Token GitHub \(opcional\)" -AsSecureString') "Prompt interativo deve ocultar o token"
     Assert-True ($moduleSource -match 'COMPOSE_CONVERT_WINDOWS_PATHS = "0"') "Compose não deve converter o socket Linux"
     Assert-True ($moduleSource -match 'Remove-UnmanagedPodmanContainer') "Reexecução deve corrigir containers fora do Compose"
     Assert-True ($moduleSource -match '"rm", "--force", \$ContainerName') "Correção deve remover somente o container incompatível"
@@ -286,5 +304,7 @@ try {
     Write-Host "PASS: todos os testes foram aprovados." -ForegroundColor Green
 } finally {
     [Environment]::SetEnvironmentVariable("Path", $originalUserPath, "User")
+    [Environment]::SetEnvironmentVariable("GITHUB_TOKEN", $originalGitHubToken, "Process")
+    [Environment]::SetEnvironmentVariable("GH_TOKEN", $originalGhToken, "Process")
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }

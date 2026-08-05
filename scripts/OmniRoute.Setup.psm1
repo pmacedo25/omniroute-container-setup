@@ -5,7 +5,6 @@ function Add-KnownToolPaths {
     $paths = @(
         "$env:LOCALAPPDATA\Programs\Podman",
         "$env:ProgramFiles\RedHat\Podman",
-        "$env:ProgramFiles\GitHub CLI",
         "$env:APPDATA\Python\Python314\Scripts",
         "$env:APPDATA\Python\Python313\Scripts",
         "$env:APPDATA\Python\Python312\Scripts"
@@ -121,37 +120,36 @@ function Ensure-ContainerEngine {
     return $engine
 }
 
-function Ensure-GitHubCliAuthentication {
-    param([bool]$NonInteractive)
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        Install-WingetPackage -Id "GitHub.cli" -DisplayName "GitHub CLI"
-        Add-KnownToolPaths
-    }
-    $gitHubCli = Get-Command gh -ErrorAction SilentlyContinue
-    if (-not $gitHubCli) {
-        throw "GitHub CLI foi instalado, mas ainda não está disponível. Reabra o terminal e reexecute o instalador."
-    }
+function Resolve-SkillsGitHubToken {
+    param([string]$EnvPath, [bool]$NonInteractive)
 
-    & $gitHubCli.Source auth status --hostname github.com *> $null
-    if ($LASTEXITCODE -ne 0) {
-        if ($NonInteractive) {
-            Write-SetupMessage "GitHub CLI não está autenticado. Execute 'gh auth login --hostname github.com --git-protocol https --web' e reexecute." "WARN"
-            return $null
+    foreach ($candidate in @(
+        $env:GITHUB_TOKEN,
+        $env:GH_TOKEN,
+        (Get-EnvValue -Path $EnvPath -Name "GITHUB_TOKEN")
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$candidate)) {
+            Write-SetupMessage "Credencial GitHub disponível para sincronizar repositórios privados." "OK"
+            return ([string]$candidate).Trim()
         }
-        Write-SetupMessage "O GitHub CLI precisa de autorização para acessar skills, sandboxes e releases privados."
-        Write-Host "O navegador será aberto pelo GitHub CLI. Conclua o login e autorize os repositórios necessários."
-        Invoke-External $gitHubCli.Source @(
-            "auth", "login", "--hostname", "github.com",
-            "--git-protocol", "https", "--web"
-        ) "Falha ao autenticar o GitHub CLI"
     }
 
-    $token = (& $gitHubCli.Source auth token --hostname github.com 2>$null)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($token)) {
-        throw "GitHub CLI está conectado, mas não forneceu um token para o sandbox."
+    if ($NonInteractive) {
+        Write-SetupMessage "Nenhum GITHUB_TOKEN foi informado; a sincronização continuará como repositório público." "INFO"
+        return $null
     }
-    Write-SetupMessage "GitHub CLI autenticado para os recursos privados necessários." "OK"
-    return ([string]$token).Trim()
+
+    Write-Host "Para skills privadas ou INTERNAL, informe um token GitHub com acesso de leitura ao repositório."
+    Write-Host "Pressione ENTER sem preencher para usar um repositório público."
+    $secureToken = Read-Host "Token GitHub (opcional)" -AsSecureString
+    $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+    try {
+        $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer)
+    }
+    if ([string]::IsNullOrWhiteSpace($token)) { return $null }
+    return $token.Trim()
 }
 
 function Resolve-SkillsRepositoryUrl {
@@ -879,7 +877,7 @@ function Start-ValidatedSkillsSync {
         Invoke-External $Engine @("compose", "build", "skills-sync") `
             "Falha ao preparar o sincronizador de skills"
         Invoke-External $Engine @("compose", "run", "--rm", "--no-deps", "-e", "SKILLS_SYNC_ONCE=true", "skills-sync") `
-            "O container não conseguiu acessar e materializar o repositório de skills. Para repositórios INTERNAL, confirme o login do GitHub CLI, o acesso à organização e a autorização SSO do token."
+            "O container não conseguiu acessar e materializar o repositório de skills. Para repositórios privados ou INTERNAL, defina GITHUB_TOKEN com acesso de leitura e confirme a autorização SSO do token."
         $managedCount = @(Get-ChildItem -LiteralPath $SkillsDirectory -Directory -Filter "pat-*" |
             Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "SKILL.md") }).Count
         if ($managedCount -eq 0) {
@@ -946,7 +944,7 @@ function Invoke-OmniRouteSetup {
     $cavemanSkillsDirectory = Join-Path $homeDirectory ".cave\skills"
     New-Item -ItemType Directory -Path $cavemanSkillsDirectory -Force | Out-Null
     Set-EnvValue $envPath "CAVEMAN_SKILLS_DIR" $cavemanSkillsDirectory.Replace('\', '/')
-    $githubToken = Ensure-GitHubCliAuthentication -NonInteractive $NonInteractive
+    $githubToken = Resolve-SkillsGitHubToken -EnvPath $envPath -NonInteractive $NonInteractive
     if (![string]::IsNullOrWhiteSpace($githubToken)) {
         Set-EnvValue $envPath "GITHUB_TOKEN" $githubToken
     }
@@ -995,4 +993,4 @@ function Invoke-OmniRouteSetup {
     Write-SetupMessage "OmniRoute disponível em $baseUrl; configuração concluída." "OK"
 }
 
-Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Resolve-SkillsRepositoryUrl, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-ComboModelIdentifiers, Test-ComboModelSequence, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup
+Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Resolve-SkillsRepositoryUrl, Resolve-SkillsGitHubToken, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-ComboModelIdentifiers, Test-ComboModelSequence, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup

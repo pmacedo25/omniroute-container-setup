@@ -104,10 +104,11 @@ administrativo não desativa a contabilização: inferências feitas pelo Achill
 continuam atribuídas ao ID dessa chave, incluindo requisições, tokens e custo.
 Assim o mesmo segredo atende setup e IDE sem uma segunda etapa manual.
 
-O setup também instala o GitHub CLI quando necessário e
-verifica `gh auth status`, permitindo que o sincronizador acesse um repositório
-privado de skills. Em `-NonInteractive`, o instalador informa o comando de login
-e pode ser reexecutado depois sem perder o restante da configuração.
+O setup não depende do GitHub CLI. Para um repositório privado ou `INTERNAL`,
+ele reutiliza `GITHUB_TOKEN`/`GH_TOKEN` do ambiente ou o token já preservado no
+`.env`; no modo interativo também permite informá-lo em um prompt oculto. Para
+repositórios públicos, basta deixar o token vazio. O token precisa de acesso de
+leitura ao repositório e, quando aplicável, autorização SSO da organização.
 Depois de criar a AppKey, o instalador executa uma sincronização obrigatória
 dentro do próprio container. A instalação falha com diagnóstico acionável se o
 token não acessar o repositório ou se nenhuma entrada `pat-*` aparecer na API;
