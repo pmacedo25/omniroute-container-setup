@@ -321,6 +321,20 @@ if ([string]::IsNullOrWhiteSpace(`$currentApiKey)) {
 }
 `$env:OMNIROUTE_API_KEY = `$currentApiKey
 `$env:OPENAI_API_KEY = `$currentApiKey
+# Graphical applications inherit Explorer's environment, which may predate a
+# Git or GitHub CLI installation. Rebuild PATH from the current registry values
+# on every launch so agent tools see newly installed command-line programs.
+`$machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+`$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+`$pathEntries = @(`$machinePath, `$userPath, `$env:PATH) -split ";" |
+    Where-Object { -not [string]::IsNullOrWhiteSpace(`$_) }
+`$seenPaths = @{}
+`$env:PATH = @(`$pathEntries | Where-Object {
+    `$normalizedPath = `$_.Trim().TrimEnd("\").ToLowerInvariant()
+    if (`$seenPaths.ContainsKey(`$normalizedPath)) { return `$false }
+    `$seenPaths[`$normalizedPath] = `$true
+    return `$true
+}) -join ";"
 `$corporateCAPath = Join-Path (Split-Path -Parent `$stateDirectory) ".omniroute\setup\skills-sync\netskope-ca.pem"
 if ((Test-Path -LiteralPath `$corporateCAPath -PathType Leaf) -and
     (Get-Item -LiteralPath `$corporateCAPath).Length -gt 0) {

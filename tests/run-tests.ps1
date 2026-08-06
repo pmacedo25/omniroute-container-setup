@@ -123,6 +123,15 @@ try {
         "Ativação deve retornar caminho independente da versão"
     Assert-True ((Get-Content -LiteralPath $stableExecutable -Raw) -match "stable-version") `
         "Junction current deve resolver o executável ativo"
+    $generatedLauncher = & $achillesModule {
+        param($Home, $Root)
+        New-AchillesLauncher -HomeDirectory $Home -InstallRoot $Root
+    } $testRoot $junctionRoot
+    try {
+        [void][scriptblock]::Create((Get-Content -LiteralPath $generatedLauncher -Raw))
+    } catch {
+        throw "ASSERT FAILED: launcher com atualização de PATH deve ter sintaxe válida. $($_.Exception.Message)"
+    }
 
     $achillesConfig = Write-AchillesConfiguration -HomeDirectory $testRoot `
         -OmniRoutePort 20128
@@ -249,6 +258,9 @@ try {
     Assert-True ($achillesModuleSource -match 'IsNullOrWhiteSpace\(`\$_\)') "Launcher deve ignorar argumentos vazios do PowerShell 5"
     Assert-True ($achillesModuleSource -match 'launcher-error\.log') "Falhas ocultas do launcher devem deixar diagnóstico"
     Assert-True ($achillesModuleSource -match 'NODE_EXTRA_CA_CERTS') "Launcher deve propagar a cadeia Netskope para o Node do Achilles"
+    Assert-True ($achillesModuleSource -match 'GetEnvironmentVariable\("Path", "Machine"\)') "Launcher deve reler o PATH atual da máquina"
+    Assert-True ($achillesModuleSource -match 'GetEnvironmentVariable\("Path", "User"\)') "Launcher deve reler o PATH atual do usuário"
+    Assert-True ($achillesModuleSource -match '\$seenPaths\.ContainsKey') "Launcher deve consolidar PATH sem entradas duplicadas"
     Assert-True ($achillesModuleSource -match 'netskope-ca\.pem') "Achilles deve reutilizar somente a cadeia corporativa detectada pelo setup"
     Assert-True ($achillesModuleSource -match 'System32\\wscript\.exe') "Atalhos devem abrir sem janela de terminal"
     Assert-True ($achillesModuleSource -match 'GraphicalLauncher') "Instalação deve validar o launcher gráfico"
