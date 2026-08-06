@@ -267,6 +267,33 @@ function Get-AchillesVersion {
     throw "Não foi possível determinar a versão SemVer do artefato '$name'."
 }
 
+function Set-AchillesCurrentLink {
+    param(
+        [string]$InstallRoot,
+        [string]$VersionDirectory,
+        [string]$ExecutablePath
+    )
+    $relativeExecutable = $ExecutablePath.Substring($VersionDirectory.Length).TrimStart("\")
+    $currentPath = Join-Path $InstallRoot "current"
+    $temporaryPath = Join-Path $InstallRoot (".current-" + [Guid]::NewGuid().ToString("N"))
+    $backupPath = Join-Path $InstallRoot (".previous-current-" + [Guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Junction -Path $temporaryPath -Target $VersionDirectory -ErrorAction Stop | Out-Null
+    try {
+        if (Test-Path -LiteralPath $currentPath) {
+            Move-Item -LiteralPath $currentPath -Destination $backupPath -ErrorAction Stop
+        }
+        Move-Item -LiteralPath $temporaryPath -Destination $currentPath -ErrorAction Stop
+        Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
+    } catch {
+        Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+        if ((-not (Test-Path -LiteralPath $currentPath)) -and (Test-Path -LiteralPath $backupPath)) {
+            Move-Item -LiteralPath $backupPath -Destination $currentPath -ErrorAction SilentlyContinue
+        }
+        throw
+    }
+    return Join-Path $currentPath $relativeExecutable
+}
+
 function New-AchillesLauncher {
     param(
         [string]$HomeDirectory,
@@ -378,10 +405,16 @@ function New-AchillesShortcuts {
     New-Item -ItemType Directory -Path $startMenuDirectory -Force | Out-Null
     $wscriptPath = "$env:SystemRoot\System32\wscript.exe"
     $shell = New-Object -ComObject WScript.Shell
-    foreach ($shortcutPath in @(
+    $shortcutPaths = @(
         (Join-Path $desktopDirectory "Achilles.lnk"),
         (Join-Path $startMenuDirectory "Achilles.lnk")
-    )) {
+    )
+    $pinnedDirectory = Join-Path $env:APPDATA "Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
+    if (Test-Path -LiteralPath $pinnedDirectory -PathType Container) {
+        $shortcutPaths += @(Get-ChildItem -LiteralPath $pinnedDirectory -Filter "Achilles*.lnk" -File |
+            ForEach-Object { $_.FullName })
+    }
+    foreach ($shortcutPath in $shortcutPaths) {
         $shortcut = $shell.CreateShortcut($shortcutPath)
         $shortcut.TargetPath = $wscriptPath
         $shortcut.Arguments = "`"$GraphicalLauncherPath`""
@@ -463,6 +496,8 @@ function Install-Achilles {
         $executablePath = Join-Path $versionDirectory $relativeExecutable
     }
 
+    $stableExecutablePath = Set-AchillesCurrentLink -InstallRoot $installRoot `
+        -VersionDirectory $versionDirectory -ExecutablePath $executablePath
     $configPath = Write-AchillesConfiguration -HomeDirectory $HomeDirectory `
         -OmniRoutePort $OmniRoutePort
     Write-AchillesSettings -HomeDirectory $HomeDirectory -OmniRoutePort $OmniRoutePort | Out-Null
@@ -470,7 +505,8 @@ function Install-Achilles {
     $currentTemporaryPath = "$currentPath.new"
     $currentRecord = [ordered]@{
         version = $resolvedVersion
-        executable = $executablePath
+        executable = $stableExecutablePath
+        installDirectory = $versionDirectory
         config = $configPath
         installedAt = [DateTime]::UtcNow.ToString("o")
     }
@@ -482,7 +518,7 @@ function Install-Achilles {
     if (Test-Path -LiteralPath $FallbackIconPath -PathType Leaf) {
         Copy-Item -LiteralPath $FallbackIconPath -Destination $iconPath -Force
     } else {
-        $iconPath = $executablePath
+        $iconPath = $stableExecutablePath
     }
     $launcherPath = New-AchillesLauncher -HomeDirectory $HomeDirectory `
         -InstallRoot $installRoot

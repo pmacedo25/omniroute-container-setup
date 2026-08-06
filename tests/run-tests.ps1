@@ -109,6 +109,21 @@ try {
     Assert-True (@([Environment]::GetEnvironmentVariable("Path", "User") -split ";" |
         Where-Object { $_ -ieq (Split-Path -Parent $achillesCommand) }).Count -eq 1) "Reexecução não pode duplicar PATH"
 
+    $junctionRoot = Join-Path $testRoot "junction-install"
+    $junctionVersion = Join-Path $junctionRoot "0.2.41-test"
+    New-Item -ItemType Directory -Path $junctionVersion -Force | Out-Null
+    $junctionExecutable = Join-Path $junctionVersion "Achilles.exe"
+    Set-Content -LiteralPath $junctionExecutable -Value "stable-version" -Encoding ascii
+    $achillesModule = Get-Module Achilles.Setup
+    $stableExecutable = & $achillesModule {
+        param($Root, $Version, $Executable)
+        Set-AchillesCurrentLink -InstallRoot $Root -VersionDirectory $Version -ExecutablePath $Executable
+    } $junctionRoot $junctionVersion $junctionExecutable
+    Assert-Equal (Join-Path $junctionRoot "current\Achilles.exe") $stableExecutable `
+        "Ativação deve retornar caminho independente da versão"
+    Assert-True ((Get-Content -LiteralPath $stableExecutable -Raw) -match "stable-version") `
+        "Junction current deve resolver o executável ativo"
+
     $achillesConfig = Write-AchillesConfiguration -HomeDirectory $testRoot `
         -OmniRoutePort 20128
     Assert-Utf8WithoutBom $achillesConfig `
@@ -237,6 +252,11 @@ try {
     Assert-True ($achillesModuleSource -match 'netskope-ca\.pem') "Achilles deve reutilizar somente a cadeia corporativa detectada pelo setup"
     Assert-True ($achillesModuleSource -match 'System32\\wscript\.exe') "Atalhos devem abrir sem janela de terminal"
     Assert-True ($achillesModuleSource -match 'GraphicalLauncher') "Instalação deve validar o launcher gráfico"
+    Assert-True ($achillesModuleSource -match 'function Set-AchillesCurrentLink') "Instalação deve ativar a versão por um caminho estável"
+    Assert-True ($achillesModuleSource -match 'New-Item -ItemType Junction') "Caminho current deve ser um junction para a versão ativa"
+    Assert-True ($achillesModuleSource -match 'installDirectory = \$versionDirectory') "Estado deve identificar a pasta física para limpeza segura"
+    Assert-True ($achillesModuleSource -match 'User Pinned\\TaskBar') "Atualização deve reparar atalhos fixados na barra de tarefas"
+    Assert-True ($achillesModuleSource -match 'Achilles\*\.lnk') "Todos os atalhos Achilles fixados existentes devem ser reparados"
     Assert-True ($setupSource -match 'AchillesArtifactPath') "Setup deve aceitar artefato local para validação"
     Assert-True ($setupSource -match 'Alias\("OpenRouterAIArtifactPath"\)') "Automação anterior deve continuar aceita durante a migração"
     Assert-True ($achillesModuleSource -match '\$installedExecutables = @\(if') "Reexecução com um executável deve preservar sem erro de Count"

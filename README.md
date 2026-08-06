@@ -138,13 +138,16 @@ público do repositório exclusivo de binários, valida o SHA-256 e
 extrai versões lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
 Também cria o comando estável `achilles` em `%USERPROFILE%\.omniroute\bin`,
 inclui esse diretório no PATH do usuário e registra atalhos na Área de Trabalho
-e no Menu Iniciar. Assim, um novo terminal pode executar `achilles` e a pesquisa
+e no Menu Iniciar. A versão ativa é exposta pelo caminho estável `current`; o
+setup também corrige atalhos Achilles já fixados na barra de tarefas para não
+prendê-los a uma versão. Assim, um novo terminal pode executar `achilles` e a pesquisa
 do Windows encontra o aplicativo sem MSI ou permissões administrativas.
 
 Projetos permanecem onde o usuário escolher, e a configuração do aplicativo
 fica em `%USERPROFILE%\.achilles`. A AppKey não é duplicada no
 JSON: o processo lê `OMNIROUTE_API_KEY` do ambiente do usuário. O setup é a
-única autoridade de atualização e ativa versões por `current.json`.
+mesma ativação estável é usada pelo setup e pelo atualizador integrado. A versão
+anterior é removida automaticamente depois que a nova IDE inicia.
 
 Ao detectar OpenRouterAI, o setup copia conversas, preferências e demais
 configurações persistentes de `%USERPROFILE%\.openrouterai` para `%USERPROFILE%\.achilles`.

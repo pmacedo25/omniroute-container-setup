@@ -24,10 +24,13 @@ rodar em contêiner.
   permaneceram abertos durante uma atualização.
 - Validar arquitetura, SemVer e SHA-256.
 - Instalar lado a lado em `%LOCALAPPDATA%\Programs\Achilles`.
+- Expor a versão ativa pelo junction estável `Programs\Achilles\current` e
+  registrar `installDirectory` para a limpeza segura após o reinício.
 - Gravar configuração sem segredo em `%USERPROFILE%\.achilles`.
 - Copiar de forma aditiva o estado persistente legado em `%USERPROFILE%\.openrouterai`,
   sem caches, layouts transitórios ou launchers da marca anterior.
-- Ativar versão atomicamente e criar atalhos por usuário.
+- Ativar versão atomicamente e criar ou reparar atalhos por usuário, inclusive
+  atalhos Achilles já fixados na barra de tarefas.
 
 Não pertence aqui:
 
