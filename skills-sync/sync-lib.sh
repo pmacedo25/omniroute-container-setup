@@ -207,6 +207,7 @@ write_existing_skill() {
     # Preserve scripts, references and assets that are part of a canonical
     # .github/skills/<name> package, not only its SKILL.md entrypoint.
     cp -R "$(dirname "$source_file")/." "$skill_dir/"
+    bundle_local_references "$source_file" "$skill_dir"
 
     hash="$(skill_tree_hash "$skill_dir")"
     jq -nc \
@@ -226,6 +227,59 @@ write_existing_skill() {
             contentPath: $contentPath,
             contentSha256: $contentSha256
         }'
+}
+
+extract_markdown_targets() {
+    # Emit Markdown link/image destinations. Remote URLs and anchors are
+    # filtered by bundle_local_references after normalization.
+    grep -oE '\]\([^)]*\)' "$1" 2>/dev/null |
+        sed -E 's/^\]\(//; s/\)$//; s/[[:space:]]+"[^"]*"$//; s/^<//; s/>$//' || true
+}
+
+bundle_local_references() {
+    entry_file="$1"
+    skill_dir="$2"
+    source_root="$(realpath "${SKILLS_SOURCE_DIR:-/state/source}")"
+    queue="$(mktemp)"
+    seen="$(mktemp)"
+    printf '%s\n' "$(realpath "$entry_file")" > "$queue"
+    printf '%s\n' "$(realpath "$entry_file")" > "$seen"
+
+    while IFS= read -r current_file; do
+        extract_markdown_targets "$current_file" |
+            while IFS= read -r raw_target; do
+                target="${raw_target%%#*}"
+                target="${target%%\?*}"
+                case "$target" in
+                    ''|'#'*|http://*|https://*|mailto:*|data:*|/*) continue ;;
+                esac
+                candidate="$(dirname "$current_file")/$target"
+                [ -f "$candidate" ] || continue
+                resolved="$(realpath "$candidate")"
+                case "$resolved" in
+                    "$source_root"/*) ;;
+                    *) continue ;;
+                esac
+                grep -Fxq "$resolved" "$seen" 2>/dev/null && continue
+                printf '%s\n' "$resolved" >> "$seen"
+                relative_reference="${resolved#"$source_root"/}"
+                bundled_reference="$skill_dir/references/$relative_reference"
+                mkdir -p "$(dirname "$bundled_reference")"
+                cp "$resolved" "$bundled_reference"
+                case "$resolved" in
+                    *.md)
+                        {
+                            printf '\n\n<!-- bundled-reference: %s -->\n' "$relative_reference"
+                            printf '<reference source=%s>\n\n' "$(printf '%s' "$relative_reference" | jq -Rs .)"
+                            cat "$resolved"
+                            printf '\n\n</reference>\n'
+                        } >> "$skill_dir/SKILL.md"
+                        printf '%s\n' "$resolved" >> "$queue"
+                        ;;
+                esac
+            done
+    done < "$queue"
+    rm -f "$queue" "$seen"
 }
 
 build_catalog() {

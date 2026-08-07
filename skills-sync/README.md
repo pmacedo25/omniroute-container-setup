@@ -9,7 +9,9 @@ skills canônicas no diretório global do Caveman, normalmente
 
 1. Atualiza o repositório em `/state/source`.
 2. Converte `AGENTS.md` e cada `.agents/**/*.md` para o formato canônico
-   `SKILL.md`.
+   `SKILL.md`. Para pacotes existentes em `.github/skills`, resolve links locais
+   de forma transitiva, preserva os arquivos em `references/` e incorpora o
+   conteúdo Markdown referenciado ao corpo entregue ao modelo.
 3. Materializa cada documento como `/skills/pat-<id>/SKILL.md`.
 4. Registra o estado gerenciado em
    `/skills/.project-agents-templates/catalog.json`.
@@ -38,6 +40,8 @@ Outro agente pode consumir o mesmo diretório usando este contrato:
 - enumerar diretórios com um arquivo `SKILL.md`;
 - usar apenas `name` e `description` do frontmatter na descoberta;
 - abrir o `SKILL.md` completo somente quando a descrição for relevante;
+- considerar as seções `bundled-reference` parte integral da skill; elas
+  substituem referências relativas ao layout do repositório fonte;
 - não carregar todo o catálogo no contexto.
 
 ## Configuração

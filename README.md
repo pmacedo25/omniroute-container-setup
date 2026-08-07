@@ -166,7 +166,9 @@ OmniRoute e não usa o antigo volume `omniroute-skills`. Ele materializa
 `pat-*/SKILL.md` em `~/.agents/skills`, caminho canônico compartilhado pelo
 Achilles, Caveman e catálogo de skills da IDE, onde ocorre descoberta
 progressiva nativa: nome e descrição para seleção, conteúdo completo somente sob
-demanda. Nenhum projeto consumidor precisa clonar o repositório de templates.
+demanda. Links locais de uma skill para `.agents/**/*.md`, exemplos e assets são
+resolvidos transitivamente e empacotados com a skill; o agente não depende do
+clone do repositório fonte nem de caminhos externos ao pacote publicado.
 
 Ao final da instalação, o setup valida executável, launcher, versão ativa,
 configuração dinâmica, origem da AppKey e filtro de providers. Uma falha nessa

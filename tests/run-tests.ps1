@@ -330,6 +330,8 @@ try {
     Assert-True ($skillsSyncSource -notmatch 'mv "\$staging_skills/\$id"') "Publicação não deve mover arquivos Linux diretamente para o volume Windows"
     Assert-True ($skillsSyncSource -match 'cp -R "\$staging_skills/\$id/\." "\$incoming/"') "Publicação deve copiar sem preservar ownership Unix"
     Assert-True ($skillsSyncSource -match 'skill_tree_hash') "Mudanças em assets também devem atualizar a skill"
+    Assert-True ($skillsSyncSource -match 'bundle_local_references') "Skills canônicas devem incorporar referências locais transitivas"
+    Assert-True ($skillsSyncSource -match 'bundled-reference') "Conteúdo referenciado deve chegar no corpo entregue ao modelo"
     Assert-True ($moduleSource -match 'autorização SSO do token') "Erro de repositório INTERNAL deve orientar sobre autorização organizacional"
     Assert-True ($moduleSource -match "source: '\$\{yamlAbsPath\}'") "Mount do CA deve citar o caminho Windows"
     Assert-True ($moduleSource -match 'type: bind[\s\S]+target: /certs/corporate-ca\.pem[\s\S]+read_only: true') "Mount do CA deve usar sintaxe longa compatível com Docker e Podman"

@@ -51,6 +51,7 @@ test -f "$test_root/output/user-owned/SKILL.md"
 # layout must be copied without nested or rewritten frontmatter.
 mkdir -p "$test_root/source/.github/skills/pipfile-review"
 mkdir -p "$test_root/source/.github/skills/pipfile-review/assets"
+mkdir -p "$test_root/source/.agents/stacks/backend/assets"
 cat > "$test_root/source/.github/skills/pipfile-review/SKILL.md" <<'EOF'
 ---
 name: pipfile-review
@@ -58,7 +59,25 @@ description: Revise Pipfile e Pipfile.lock, dependências, índices e reprodutib
 ---
 
 # Pipfile review
+
+[Full guide](../../../.agents/stacks/backend/python-backend.md)
 EOF
+cat > "$test_root/source/.agents/stacks/backend/python-backend.md" <<'EOF'
+# Python backend
+
+Use the complete implementation examples in [python-backend-examples.md](python-backend-examples.md).
+
+[Architecture diagram](assets/diagram.txt)
+EOF
+cat > "$test_root/source/.agents/stacks/backend/python-backend-examples.md" <<'EOF'
+# Python implementation examples
+
+```python
+def healthcheck() -> dict[str, str]:
+    return {"status": "ok"}
+```
+EOF
+printf '%s\n' 'reference asset' > "$test_root/source/.agents/stacks/backend/assets/diagram.txt"
 printf '%s\n' 'fixture asset' > \
     "$test_root/source/.github/skills/pipfile-review/assets/example.txt"
 SKILLS_PATH=".github/skills"
@@ -67,10 +86,20 @@ run_sync
 test "$(jq -r '.skills | length' "$catalog")" = "2"
 test "$(jq -r '.skills[] | select(.id == "pat-pipfile-review") | .description' "$catalog")" = \
     "Revise Pipfile e Pipfile.lock, dependências, índices e reprodutibilidade."
-cmp "$test_root/source/.github/skills/pipfile-review/SKILL.md" \
-    "$test_root/output/pat-pipfile-review/SKILL.md"
+source_skill_size="$(wc -c < "$test_root/source/.github/skills/pipfile-review/SKILL.md")"
+head -c "$source_skill_size" "$test_root/output/pat-pipfile-review/SKILL.md" > "$test_root/skill-prefix.md"
+cmp "$test_root/source/.github/skills/pipfile-review/SKILL.md" "$test_root/skill-prefix.md"
 cmp "$test_root/source/.github/skills/pipfile-review/assets/example.txt" \
     "$test_root/output/pat-pipfile-review/assets/example.txt"
+cmp "$test_root/source/.agents/stacks/backend/python-backend.md" \
+    "$test_root/output/pat-pipfile-review/references/.agents/stacks/backend/python-backend.md"
+cmp "$test_root/source/.agents/stacks/backend/python-backend-examples.md" \
+    "$test_root/output/pat-pipfile-review/references/.agents/stacks/backend/python-backend-examples.md"
+cmp "$test_root/source/.agents/stacks/backend/assets/diagram.txt" \
+    "$test_root/output/pat-pipfile-review/references/.agents/stacks/backend/assets/diagram.txt"
+grep -q 'bundled-reference: .agents/stacks/backend/python-backend.md' \
+    "$test_root/output/pat-pipfile-review/SKILL.md"
+grep -q 'def healthcheck()' "$test_root/output/pat-pipfile-review/SKILL.md"
 test -f "$test_root/output/user-owned/SKILL.md"
 test ! -e "$test_root/output/pat-task-workflows-testing"
 
