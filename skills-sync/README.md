@@ -2,7 +2,7 @@
 
 Este serviço mantém `project-agents-templates` como fonte central e materializa
 skills canônicas no diretório global do Caveman, normalmente
-`~/.cave/skills`. Os projetos consumidores não recebem clones nem cópias de
+`~/.agents/skills`. Os projetos consumidores não recebem clones nem cópias de
 `.agents/`. Não há dependência de OmniRoute, Achilles, MCP ou API própria.
 
 ## Fluxo
@@ -21,7 +21,7 @@ diretório nunca são alteradas.
 ## Contrato para agentes
 
 O Caveman possui descoberta progressiva nativa: lê o frontmatter dos
-`~/.cave/skills/*/SKILL.md` para apresentar ao modelo somente nome e descrição,
+`~/.agents/skills/*/SKILL.md` para apresentar ao modelo somente nome e descrição,
 e lê o corpo da skill escolhida sob demanda. Logo, não é necessário criar uma
 ferramenta de roteamento paralela.
 

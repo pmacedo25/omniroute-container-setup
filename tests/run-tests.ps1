@@ -38,6 +38,17 @@ try {
     Assert-Equal "second" (Get-EnvValue $envPath "SECRET") "Set-EnvValue deve atualizar"
     Assert-Equal 1 (@(Get-Content $envPath | Where-Object { $_ -match "^SECRET=" }).Count) "Variável não pode duplicar"
     Set-EnvValue $envPath "OPENHANDS_VERSION" "legacy"
+
+    $migrationHome = Join-Path $testRoot "skills-migration-home"
+    $legacyManaged = Join-Path $migrationHome ".cave\skills\pat-testing"
+    $legacyUserOwned = Join-Path $migrationHome ".cave\skills\user-owned"
+    $canonicalSkills = Join-Path $migrationHome ".agents\skills"
+    New-Item -ItemType Directory -Path $legacyManaged,$legacyUserOwned,$canonicalSkills -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $legacyManaged "SKILL.md") -Value "managed" -Encoding utf8
+    Set-Content -LiteralPath (Join-Path $legacyUserOwned "SKILL.md") -Value "user" -Encoding utf8
+    Remove-LegacyManagedSkills -HomeDirectory $migrationHome -CanonicalSkillsDirectory $canonicalSkills
+    Assert-True (-not (Test-Path -LiteralPath $legacyManaged)) "Migração deve remover apenas skills pat-* antigas"
+    Assert-True (Test-Path -LiteralPath $legacyUserOwned) "Migração deve preservar skills Caveman do usuário"
     Set-EnvValue $envPath "GITHUB_TOKEN" "legacy-secret"
     Remove-EnvValue $envPath @("OPENHANDS_VERSION", "GITHUB_TOKEN")
     Assert-True ($null -eq (Get-EnvValue $envPath "OPENHANDS_VERSION")) "Configuração legada deve ser removida"
@@ -311,7 +322,10 @@ try {
     Assert-True ($achillesModuleSource -match '`\$env:OPENAI_API_KEY = `\$currentApiKey') "Compatibilidade OpenAI deve usar a mesma AppKey atual"
     Assert-True ($moduleSource -notmatch 'Ensure-AchillesAppKey|AppKey do Achilles') "Instalador não deve solicitar uma segunda AppKey"
     Assert-True ($composeSource -notmatch 'condition:\s+service_healthy|OMNIROUTE_URL|/api/skills') "Skills não devem depender da API do OmniRoute"
-    Assert-True ($composeSource -match 'CAVEMAN_SKILLS_DIR') "Skills devem ser materializadas no diretório global do Caveman"
+    Assert-True ($composeSource -match 'CAVEMAN_SKILLS_DIR') "Skills devem usar o bind mount global compartilhado"
+    Assert-True ($moduleSource -match '\.agents\\skills') "Skills sincronizadas devem usar o diretório canônico ~/.agents/skills"
+    Assert-True ($moduleSource -match 'Remove-LegacyManagedSkills') "Reexecução deve limpar apenas skills pat-* da localização antiga"
+    Assert-True ($envExampleSource -match 'CAVEMAN_SKILLS_DIR=C:/Users/seu-usuario/\.agents/skills') "Exemplo deve apontar para ~/.agents/skills"
     Assert-True ($moduleSource -match 'Start-ValidatedSkillsSync[\s\S]+SKILLS_SYNC_ONCE=true') "Instalador deve validar a primeira sincronização no container"
     Assert-True ($skillsSyncSource -notmatch 'mv "\$staging_skills/\$id"') "Publicação não deve mover arquivos Linux diretamente para o volume Windows"
     Assert-True ($skillsSyncSource -match 'cp -R "\$staging_skills/\$id/\." "\$incoming/"') "Publicação deve copiar sem preservar ownership Unix"

@@ -122,7 +122,7 @@ Na instalação:
 - `agent-skills-sync:1`: converte o repositório de governança em skills
   canônicas globais do Caveman e reconcilia a cada hora.
 - o volume nomeado preserva o banco do OmniRoute; as skills ficam no diretório
-  global `~/.cave/skills` do host.
+  global `~/.agents/skills` do host.
 - a porta `20128` fica disponível no host. A APPKEY continua obrigatória.
 - reexecuções mantêm apenas uma AppKey chamada `omniroute-setup`; duplicatas
   antigas criadas pelo próprio instalador são removidas sem afetar chaves de
@@ -163,7 +163,8 @@ conexões e combos criados pelo usuário são preservados.
 
 O sincronizador não instala, remove nem publica documentos em `/api/skills` do
 OmniRoute e não usa o antigo volume `omniroute-skills`. Ele materializa
-`pat-*/SKILL.md` em `~/.cave/skills`, onde o Caveman faz descoberta
+`pat-*/SKILL.md` em `~/.agents/skills`, caminho canônico compartilhado pelo
+Achilles, Caveman e catálogo de skills da IDE, onde ocorre descoberta
 progressiva nativa: nome e descrição para seleção, conteúdo completo somente sob
 demanda. Nenhum projeto consumidor precisa clonar o repositório de templates.
 

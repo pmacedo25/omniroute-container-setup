@@ -897,6 +897,31 @@ function Start-ValidatedSkillsSync {
     }
 }
 
+function Remove-LegacyManagedSkills {
+    param(
+        [Parameter(Mandatory = $true)][string]$HomeDirectory,
+        [Parameter(Mandatory = $true)][string]$CanonicalSkillsDirectory
+    )
+    $legacyDirectory = [IO.Path]::GetFullPath((Join-Path $HomeDirectory ".cave\skills"))
+    $canonicalDirectory = [IO.Path]::GetFullPath($CanonicalSkillsDirectory)
+    if ($legacyDirectory.Equals($canonicalDirectory, [StringComparison]::OrdinalIgnoreCase) -or
+        -not (Test-Path -LiteralPath $legacyDirectory -PathType Container)) {
+        return
+    }
+    # The successful sync above proves the canonical copy exists. Remove only
+    # this installer's namespace and state; user-owned Caveman skills survive.
+    Get-ChildItem -LiteralPath $legacyDirectory -Directory -Filter "pat-*" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            if (Test-Path -LiteralPath (Join-Path $_.FullName "SKILL.md") -PathType Leaf) {
+                Remove-Item -LiteralPath $_.FullName -Recurse -Force
+            }
+        }
+    $legacyState = Join-Path $legacyDirectory ".project-agents-templates"
+    if (Test-Path -LiteralPath $legacyState) {
+        Remove-Item -LiteralPath $legacyState -Recurse -Force
+    }
+}
+
 function Restart-ContainerGateway {
     param([string]$Engine, [string]$SetupDirectory)
     Push-Location $SetupDirectory
@@ -946,9 +971,11 @@ function Invoke-OmniRouteSetup {
     # Discovery is automatic (.github/skills, .agents, or AGENTS.md). Clear
     # values left by v1.1.8, which exposed a path parameter prematurely.
     Set-EnvValue $envPath "OMNIROUTE_SKILLS_PATH" ""
-    $cavemanSkillsDirectory = Join-Path $homeDirectory ".cave\skills"
-    New-Item -ItemType Directory -Path $cavemanSkillsDirectory -Force | Out-Null
-    Set-EnvValue $envPath "CAVEMAN_SKILLS_DIR" $cavemanSkillsDirectory.Replace('\', '/')
+    $agentSkillsDirectory = Join-Path $homeDirectory ".agents\skills"
+    New-Item -ItemType Directory -Path $agentSkillsDirectory -Force | Out-Null
+    # Keep the Compose variable name for in-place upgrades, but point it at the
+    # Agent Skills canonical user directory consumed by Achilles and Theia.
+    Set-EnvValue $envPath "CAVEMAN_SKILLS_DIR" $agentSkillsDirectory.Replace('\', '/')
     $githubToken = Resolve-SkillsGitHubToken -EnvPath $envPath -NonInteractive $NonInteractive
     if (![string]::IsNullOrWhiteSpace($githubToken)) {
         Set-EnvValue $envPath "GITHUB_TOKEN" $githubToken
@@ -970,7 +997,9 @@ function Invoke-OmniRouteSetup {
     # Validate GitHub access from the same container/network used in normal
     # operation and require a non-empty first publication.
     Start-ValidatedSkillsSync -Engine $engine -SetupDirectory $SetupDirectory `
-        -SkillsDirectory $cavemanSkillsDirectory
+        -SkillsDirectory $agentSkillsDirectory
+    Remove-LegacyManagedSkills -HomeDirectory $homeDirectory `
+        -CanonicalSkillsDirectory $agentSkillsDirectory
     Set-TokenEfficiencyDefaults -BaseUrl $baseUrl -AppKey $appKey
 
     if (-not $SkipProviderLogin -and -not $NonInteractive) {
@@ -998,4 +1027,4 @@ function Invoke-OmniRouteSetup {
     Write-SetupMessage "OmniRoute disponível em $baseUrl; configuração concluída." "OK"
 }
 
-Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Resolve-SkillsRepositoryUrl, Resolve-SkillsGitHubToken, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-ComboModelIdentifiers, Test-ComboModelSequence, Get-PathWithEntry, Invoke-CorporateCAInjection, Invoke-OmniRouteSetup
+Export-ModuleMember -Function Set-EnvValue, Remove-EnvValue, Get-EnvValue, Get-ContainerEngine, Resolve-SkillsRepositoryUrl, Resolve-SkillsGitHubToken, Test-AppKey, Ensure-AppKey, Set-TokenEfficiencyDefaults, Set-ConfiguredProvidersOnly, Set-ConfiguredCombos, Get-ComboModelIdentifiers, Test-ComboModelSequence, Get-PathWithEntry, Invoke-CorporateCAInjection, Remove-LegacyManagedSkills, Invoke-OmniRouteSetup
